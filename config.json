@@ -1,0 +1,29 @@
+{
+	"repositories":
+	{
+		"test":
+		{
+			"disabled":"",
+			"orig_type":"git",
+			"orig_url":"https://github.com/juanma1980",
+			"dest_type": "",
+			"dest_url": "",
+			"blacklist": [],
+			"whitelist": [],
+			"destionation_path":"",
+			"delete_when_processed":"",
+			"single_commit":"",
+			"user_to_commit":""
+		}
+	},
+
+	"config":
+	{
+		"minutes_between_syncs":"60", 
+		"default_destionation_path":"/tmp/",
+		"default_delete_when_processed":"False",
+		"default_single_commit":"False",
+		"default_user_to_commit":""
+	}
+}
+
