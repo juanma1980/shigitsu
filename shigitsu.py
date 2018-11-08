@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 import urllib
 from urllib.request import Request
 from urllib.request import urlretrieve
@@ -11,156 +11,106 @@ from bs4 import BeautifulSoup
 import git
 from git import Repo
 from collections import OrderedDict
+import json
 import gettext
 gettext.textdomain('sync_to_svn')
 _=gettext.gettext
+#plugins
+import gitsync
 
 def _debug(msg):
 	if dbg:
 		print("%s"%msg)
 
-def _get_git_repo(repo,repo_name):
-	dest_path="/tmp/%s"%repo_name
-	_debug("Cloning %s in %s"%(repo,dest_path))
+def _read_config(conf_file):
+	#read config
 	try:
-		git.Repo.clone_from(repo,dest_path)
-	except Exception as e:
-		dest_path=""
-		print(e)
-	return dest_path
-#def _get_git_repo
+		with open(conf_file) as f:
+			data=json.load(f)
+		#set default values
+		minutes_between_sync=data['default']['minutes_between_syncs']
+		default_dest_path=data['default']['default_dest_path']
+		default_delete_when_processed=data['default']['default_delete_when_processed']
+		default_single_commit=data['default']['default_single_commit']
+		default_user_to_commit=data['default']['default_user_to_commit']
 
-def _check_repo_consistency(repo_path):
-	repo=Repo(repo_path)
-	sw_ok=True
-	#Change to debian/bionic
-	try:
-		repo.git.checkout('debian/xenial')
+		repos_dict={}
+		for repo,data in data['repositories'].items():
+			repo_aux={}
+			if 'disabled' in data.keys():
+					if data['disabled'].lower()=='false':
+						print("Repository %s is disabled"%repo)
+						continue
+			if "orig_type" in data.keys():
+				repo_aux.update({"orig_type":data['orig_type']})
+			else:
+				print("Repository %s has no orig_type defined"%repo)
+				continue
+			if 	"orig_url" in data.keys():
+				repo_aux.update({"orig_url":data['orig_url']})
+			else:
+				print("Repository %s has no orig_url defined"%repo)
+				continue
+			if 	"dest_type" in data.keys():
+				repo_aux.update({"dest_type":data['dest_type']})
+			else:
+				print("Repository %s has no dest_type defined"%repo)
+				continue
+			if 	"dest_url" in data.keys():
+				repo_aux.update({"dest_url":data['dest_url']})
+			else:
+				print("Repository %s has no dest_url defined"%repo)
+				continue
+			if 	"dest_path" in data.keys():
+				repo_aux.update({"dest_path":data['dest_path']})
+			else:
+				repo_aux.update({"dest_path":default_dest_path})
+			if 	"user_to_commit" in data.keys():
+				repo_aux.update({"user_to_commit":data['user_to_commit']})
+			else:
+				repo_aux.update({"user_to_commit":default_user_to_commit})
+			if 	"single_commit" in data.keys():
+				repo_aux.update({"single_commit":data['single_commit']})
+			else:
+				repo_aux.update({"single_commit":default_single_commit})
+			if 	"delete_when_processed" in data.keys():
+				repo_aux.update({"delete_when_processed":data['delete_when_processed']})
+			else:
+				repo_aux.update({"delete_when_processed":default_delete_when_processed})
+			if 	"blacklist" in data.keys():
+				repo_aux.update({"blacklist":data['blacklist']})
+			if 	"whitelist" in data.keys():
+				repo_aux.update({"whitelist":data['whitelist']})
+			if _validate_config(repo_aux):
+				repos_dict.update({repo:repo_aux})
 	except Exception as e:
-		_debug(e)
-		sw_ok=False
-	#Merge with master
-	if sw_ok:
-		repo.git.merge("master")
-	return sw_ok
+		print("Conf file %s couldn't be parsed: %s"%(conf_file,e))
+	return repos_dict	
 
-def _sync_commits_with_svn(repo_path):
-	repo=Repo(repo_path)
-	commits=repo.git.rev_list("--first-parent","--pretty","master","debian/xenial")
-	commits_array=commits.split('\n')
-	commits_dict=OrderedDict()
-	msg=''
-	commit=''
-	author=''
-	date=''
-	for data in commits_array:
-		if data.startswith('Merge'):
-			pass
-		elif data.startswith('commit'):
-			if commit:
-				commits_dict.update({commit:{'author':author,'date':date,'msg':msg}})
-				msg=''
-				commit=''
-				author=''
-				date=''
-			commit=data
-		elif data.startswith('Author'):
-			author=data
-		elif data.startswith('Date'):
-			date=data
-		elif data=='':
-			continue
+def _validate_config(repo_dict):
+	sw_validate=True
+	if 'dest_path' in repo_dict.keys():
+		if repo_dict['dest_path']:
+			if not os.path.isdir(repo_dict['dest_path']):
+				try:
+					os.makedirs(repo_dict['dest_path'])
+				except:
+					print("Unable to create dest dir %s"%repo_dict['dest_path'])
+					sw_validate=False
 		else:
-			msg+="%s "%data.strip()
-	print (commits_dict)
+			print("Dest dir not set")
+			sw_validate=False
+	if sw_validate:
+		if 'user_to_commit' in repo_dict.keys():
+			if not repo_dict['user_tp_commit']:
+				print("There's no user to commit")
+				sw_validate=False
+		else:
+			print("There's no user to commit")
+			sw_validate=False
+	return sw_validate
 
-def _askpass():
-	pass
-#def _askpass
-
-def _generate_svn_structure():
-	pass
-#def _generate_svn_structure
-
-def _list_repos(repo_url):
-	dest_path='/tmp/tmpfile'
-	try:
-		req=Request(repo_url, headers={'User-Agent':'Mozilla/5.0'})
-		with urllib.request.urlopen(req) as f:
-			content=(f.read().decode('utf-8'))
-		soup=BeautifulSoup(content,"html.parser")
-		available_repos=soup.findAll('a', attrs={ "itemprop" : "name codeRepository"})
-		print("Available repos at %s"%git_repo)
-		repo_names=[]
-		for repo in available_repos:
-			repo_name=''.join(repo['href'].split('/')[2:])
-			repo_names.append(repo_name)
-		available_repos=sorted(repo_names,key=str.lower)
-
-	except Exception as e:
-		print(e)
-	return available_repos
-#def _list_repos
-
-
-#### MAIN PROGRAM ####
 dbg=True
-conf_file="./sync.conf"
-delete_when_processed=0
-sync_path='/tmp'
-single_commit=0
-svn_repo=''
-#git_repo="https://github.com/juanma1980"
-git_repo=""
-#read config
-with open(conf_file) as f:
-	data=f.readlines()
-for line in data:
-	if line.startswith("sync_path"):
-		sync_path=line.split('=')[-1].rstrip("\r\n").strip("\"")
-	if line.startswith("delete_when_processed"):
-		delete_when_processed=line.split('=')[-1].rstrip("\r\n").strip("\"")
-	if line.startswith("single_commit"):
-		single_commit=line.split('=')[-1].rstrip("\r\n").strip("\"")
-	if line.startswith("git_repo"):
-		git_repo=line.split('=')[-1].rstrip("\r\n").strip("\"")
-	if line.startswith("svn_repo"):
-		svn_repo=line.split('=')[-1].rstrip("\r\n").strip("\"")
-git_server='/'.join(git_repo.split('/')[0:-1])
-
-user_input=input(_("Insert the origin git repo [%s]: ")%git_repo)
-if user_input:
-	git_repo=user_input
-
-available_repos=_list_repos("%s?tab=repositories"%git_repo)
-first=''
-for repo in available_repos:
-	if repo[0:1].lower()!=first.lower():
-		first=repo[0:1].lower()
-		print("[%s]"%first)
-	print ("%s"%(repo))
-input_repos_to_update=input(_('Enter a repo name, letter index or "*" for all: '))
-repos_to_update=[]
-if input_repos_to_update in available_repos:
-	repos_to_update.append(input_repos_to_update)
-elif input_repos_to_update=='*':
-	repos_to_update=available_repos
-else:
-	sw_match=False
-	for repo in available_repos:
-		if repo.startswith(input_repos_to_update):
-			repos_to_update.append(repo)
-			sw_match=True
-		elif sw_match:
-			break
-input_user=input (_("We're going to sync these repos:\n%s\nProceed? y/n [n]: ")%repos_to_update)
-if input_user.lower()=='y':
-	for repo in repos_to_update:
-		repo_path="%s/%s"%(git_repo,repo)
-		if not repo_path.endswith('.git'):
-			repo_path="%s.git"%repo_path
-		local_git_repo=_get_git_repo(repo_path,repo)
-		if _check_repo_consistency(local_git_repo):
-			_sync_commits_with_svn(local_git_repo)
-		else:
-			print("Repo %s couldn't be added"%repo)
+conf_file="./config.json"
+repos_dict=_read_config(conf_file)
+print(repos_dict)
