@@ -5,11 +5,11 @@
 		{
 			"disabled":"",
 			"orig_type":"git",
-			"orig_url":"https://github.com/juanma1980",
-			"dest_type": "",
-			"dest_url": "",
+			"orig_url":"https://github.com/lliurex",
+			"dest_type": "svn",
+			"dest_url": "file:///home/juanma/svn/repo/",
 			"blacklist": [],
-			"whitelist": [],
+			"whitelist": ["lliurex-store"],
 			"dest_path":"",
 			"delete_when_processed":"",
 			"single_commit":"",
@@ -23,7 +23,9 @@
 		"default_dest_path":"/tmp/",
 		"default_delete_when_processed":"False",
 		"default_single_commit":"False",
-		"default_user_to_commit":""
+		"default_user_to_commit":"juanma",
+		"default_blacklist":[],
+		"default_whitelist":[]
 	}
 }
 
