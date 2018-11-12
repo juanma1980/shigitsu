@@ -135,13 +135,16 @@ def _process_repos(repos_dict):
 		print("Repo type: %s"%data['orig_type'])
 		print("Repo dest: %s"%data['dest_url'])
 		print("Repo dest type: %s"%data['dest_type'])
+		print("Blacklist: %s"%data['blacklist'])
 		print("----------")
 		if data['orig_type'].lower()=='git':
 			repo=gitsync.gitsync()
 		elif data['orig_type'].lower()=='svn':
 			repo=svnsync.svnsync()
 		repo.set_config(data)
-		repo.sync()
+		result=repo.sync()
+		for key,value in result.items():
+			print("%s: %s"%(key,value))
 #def _process_repos
 
 

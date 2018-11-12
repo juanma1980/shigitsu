@@ -9,7 +9,7 @@
 			"dest_type": "svn",
 			"dest_url": "file:///home/juanma/svn/repo/",
 			"blacklist": [],
-			"whitelist": ["lliurex-store"],
+			"whitelist": [],
 			"dest_path":"",
 			"delete_when_processed":"",
 			"single_commit":"",
@@ -24,7 +24,7 @@
 		"default_delete_when_processed":"False",
 		"default_single_commit":"False",
 		"default_user_to_commit":"juanma",
-		"default_blacklist":[],
+		"default_blacklist":["lliurexhub.io","llxdoc.*","presentations","quadrapassel","llx-valencianitzador","HIG","gparted","dia","pavucontrol","jocomunico","polin"],
 		"default_whitelist":[]
 	}
 }
