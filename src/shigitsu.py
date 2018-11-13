@@ -14,7 +14,7 @@ from collections import OrderedDict
 import json
 import datetime
 import gettext
-gettext.textdomain('sync_to_svn')
+gettext.textdomain('shigitsu')
 _=gettext.gettext
 #plugins
 import gitsync
@@ -171,8 +171,6 @@ def _process_repos(repos_dict):
 			sync_repo=svnsync.svnsync()
 		sync_repo.set_config(data)
 		sync_result.update({repo:sync_repo.sync()})
-		for key,value in sync_result.items():
-			print("%s: %s"%(key,value))
 	_write_result_log(sync_result)
 
 #def _process_repos
@@ -208,10 +206,14 @@ def _write_log(error):
 			print("Log file %s couldn't be opened: %s"%(error_file,e))
 
 #### MAIN PROGRAM ####
+print("\nWelcome to %sShigitsu%s"%(color.RED,color.END))
+resp=input("Start sync [y/n]? ")
+if resp.lower()=='y':
+	_write_log("")
+	_write_log(":::::::::: INIT :::::::::")
+	for f in os.listdir(conf_dir):
+		repos_dict.update(_read_config("%s/%s"%(conf_dir,f)))
+	_process_repos(repos_dict)
+	_write_log(":::::::::: END :::::::::")
+	print("\nProcess finished!!")
 
-_write_log("")
-_write_log(":::::::::: INIT :::::::::")
-for f in os.listdir(conf_dir):
-	repos_dict.update(_read_config("%s/%s"%(conf_dir,f)))
-_process_repos(repos_dict)
-_write_log(":::::::::: END :::::::::")

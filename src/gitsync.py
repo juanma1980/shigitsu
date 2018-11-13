@@ -28,20 +28,34 @@ class gitsync():
 		self.config=[]
 		self.dbg=True
 		self.debian_release="debian/bionic"
-		self.dest_path="/tmp/git/"
 		self.sync_result={}
-		self.commits_db="commits.sql"
+		self.commits_db="/usr/share/shigitsu/commits.sql"
 		self.err=None
-		self.error_file="error.log"
-		if not os.path.isdir(self.dest_path):
-			os.makedirs(self.dest_path)
 	#def __init__
 
 	def _debug(self,msg):
 		if self.dbg:
 			print("Debug: %s"%msg)
+	#def _debug
+
+	def set_dest_path(self,path):
+		self.config.update({'dest_path':path})
+	#def set_dest_path
 
 	def sync(self):
+		if self.config['dest_path']:
+			if not os.path.isdir(self.config['dest_path']):
+				try:
+					os.makedirs(self.config['dest_path'])
+				except Exception as e:
+					self._debug(e)
+					self.sync_result.update({'ERROR':'Destination path could not be created'})
+					return(self.sync_result)
+		else:
+			self._debug("Theres no dest path")
+			self.sync_result.update({'ERROR':'Destination path is not set'})
+			return(self.sync_result)
+
 		self._set_db()
 		repos=self._list_repos(self.config['orig_url'])
 		not_whitelisted=[]
@@ -86,9 +100,11 @@ class gitsync():
 		self.sync_result.update({'inconsistent':inconsistent})
 		self.sync_result.update({'no_master_branch':no_master_branch})
 		return self.sync_result
+	#def sync
 
 	def set_config(self,conf_dict):
 		self.config=conf_dict
+	#def set_config
 
 	def _list_repos(self,repo_url):
 		repos=None
@@ -110,7 +126,7 @@ class gitsync():
 	#def _list_repos
 
 	def _get_repo(self,repo,repo_name):
-		dest_path="/tmp/git/%s"%repo_name
+		dest_path="%s/%s"%(self.config['dest_path'],repo_name)
 		self._debug("Cloning %s in %s"%(repo,dest_path))
 		if os.path.isdir(dest_path):
 			repo = git.Repo(dest_path)
@@ -124,6 +140,8 @@ class gitsync():
 		else:
 			try:
 				git.Repo.clone_from(repo,dest_path)
+				repo = git.Repo(dest_path)
+				repo.git.checkout("master")
 			except Exception as e:
 				self.err=e
 				dest_path=""
@@ -169,7 +187,6 @@ class gitsync():
 			if type(branches)!=type([]):
 				branches=[branches]
 		args.extend(branches)
-#		commits=repo.git.rev_list("--reverse","--first-parent","--pretty",' '.join(branches))
 		commits=repo.git.rev_list(args)
 		commits_array=commits.split('\n')
 		commits_dict=OrderedDict()
@@ -216,7 +233,6 @@ class gitsync():
 		svn_local_repo=self._chk_svn_dir(repo_name,r_svn)
 		l_svn_base_path="%s/../../"%svn_local_repo
 		l_svn=svn.local.LocalClient(l_svn_base_path)
-#		for commit,data in commits.items():
 		sw_continue=True
 		for commit,data in commits.items():
 			commit_id=commit.split(' ')[-1]
@@ -244,7 +260,6 @@ class gitsync():
 			files_to_del=[]
 			try:
 				for st in l_svn.status():
-#					print ("%s: %s"%(st.name,st.type_raw_name))
 					if st.type_raw_name=='unversioned':
 						f=st.name
 						if '@' in f:
@@ -263,9 +278,7 @@ class gitsync():
 				print(e)
 			self._debug("Commit %s"%commit_msg)
 			if files_to_del:
-#				files_to_del.sort(key = len,reverse=True)
 				files_to_del.sort(key = len)
-#				print(files_to_del)
 				l_svn.run_command('delete',files_to_del)
 				r_svn.run_command('delete',files_to_del)
 			try:
@@ -292,6 +305,7 @@ class gitsync():
 			os.makedirs("%s/trunk/fuentes"%svn_tmpdir)
 			os.makedirs("%s/trunk/docs"%svn_tmpdir)
 		return ("%s/trunk/fuentes"%svn_tmpdir)
+	#def _chk_svn_dir
 
 	def _copy_data(self,src,dest,ignore=None):
 		if os.path.isdir(src):
@@ -317,6 +331,7 @@ class gitsync():
 				shutil.copystat(src,dest)
 			except:	
 				pass
+	#def _copy_data
 
 	def _set_db(self):
 		sw_db_exists=False
@@ -350,7 +365,7 @@ class gitsync():
 		except Exception as e:
 			#self._debug("Commit error: %s. Rollback launched\n"%e)
 			self.db.rollback()
-	#def _commit_bd
+	#def _write_info
 
 	def _get_last_commit(self,repo):
 		commit=None
@@ -360,3 +375,4 @@ class gitsync():
 			#self._debug("Row: %s"%str(row))
 			commit=str(row[0])
 		return(commit)
+	#def _get_last_commit
