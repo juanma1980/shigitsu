@@ -42,15 +42,22 @@ class gitsync():
 		self.config.update({'dest_path':path})
 	#def set_dest_path
 
+	def set_dest_path(self,path):
+		self.config.update({'dest_path':path})
+
 	def sync(self):
 		if self.config['dest_path']:
 			if not os.path.isdir(self.config['dest_path']):
+<<<<<<< HEAD
 				try:
 					os.makedirs(self.config['dest_path'])
 				except Exception as e:
 					self._debug(e)
 					self.sync_result.update({'ERROR':'Destination path could not be created'})
 					return(self.sync_result)
+=======
+				os.makedirs(self.config['dest_path'])
+>>>>>>> 3ff4340c65be25605f56002048ad03dd0d280128
 		else:
 			self._debug("Theres no dest path")
 			self.sync_result.update({'ERROR':'Destination path is not set'})
@@ -126,7 +133,11 @@ class gitsync():
 	#def _list_repos
 
 	def _get_repo(self,repo,repo_name):
+<<<<<<< HEAD
 		dest_path="%s/%s"%(self.config['dest_path'],repo_name)
+=======
+		dest_path=self.config['dest_path']
+>>>>>>> 3ff4340c65be25605f56002048ad03dd0d280128
 		self._debug("Cloning %s in %s"%(repo,dest_path))
 		if os.path.isdir(dest_path):
 			repo = git.Repo(dest_path)
