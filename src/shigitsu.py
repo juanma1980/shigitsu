@@ -22,8 +22,8 @@ import svnsync
 
 #Global variables
 dbg=True
-conf_dir="./config.d"
-error_file="./error.log"
+conf_dir="/usr/share/shigitsu/config.d"
+error_file="/usr/share/shigitsu/error.log"
 #conf_file="./config.json"
 repos_dict={}
 
