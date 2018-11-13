@@ -1,24 +1,5 @@
-appinfo (0.2.4) xenial; urgency=medium
-
-  * Add new translations
-
- -- Raul Rodrigo Segura <raurodse@gmail.com>  Tue, 25 Sep 2018 14:15:49 +0200
-
-appinfo (0.2.3) xenial; urgency=medium
-
-  * Add scroll to policy 
-  * Update translations
-
- -- Juanma Navarro Mañez <juanma1980@gmail.com>  Wed, 12 Sep 2018 10:09:04 +0200
-
-appinfo (0.2) xenial; urgency=medium
-
-  * Add translations and metainfo
-
- -- Juanma Navarro Mañez <juanma1980@gmail.com>  Tue, 11 Sep 2018 16:07:29 +0200
-
-appinfo (0.1.1) xenial; urgency=medium
+shigitsu (0.1) xenial; urgency=medium
 
   * Initial release.
 
- -- Juanma Navarro Mañez <juanma1980@gmail.com>  Tue, 11 Sep 2018 14:00:15 +0200
+ -- Juanma Navarro Mañez <juanma1980@gmail.com>  Tue, 13 Nov 2018 13:06:25 +0100
