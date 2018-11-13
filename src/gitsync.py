@@ -47,6 +47,7 @@ class gitsync():
 		not_whitelisted=[]
 		blacklisted=[]
 		inconsistent=[]
+		no_master_branch=[]
 		if repos:
 			for repo in repos:
 				repo_name=repo['clone_url'].split('/')[-1].replace('.git','')
@@ -71,14 +72,19 @@ class gitsync():
 						if sw_match:
 							continue
 				repo_path=self._get_repo(repo['clone_url'],repo_name)
-				if self._check_repo_consistency(repo_path):
-					self._sync_repo(repo_path,repo_name)
+				if repo_path:
+					if self._check_repo_consistency(repo_path):
+						self._sync_repo(repo_path,repo_name)
+					else:
+						inconsistent.append({repo_name:self.err})
+						print("Discard for inconsistency %s"%repo_name)
 				else:
-					inconsistent.append({repo_name:self.err})
-					print("Discard for inconsistency %s"%repo_name)
+					no_master_branch.append({repo_name:self.err})
+					print("Discard for no master branch %s"%repo_name)
 		self.sync_result.update({'not_whitelisted':not_whitelisted})
 		self.sync_result.update({'blacklisted':blacklisted})
 		self.sync_result.update({'inconsistent':inconsistent})
+		self.sync_result.update({'no_master_branch':no_master_branch})
 		return self.sync_result
 
 	def set_config(self,conf_dict):
@@ -112,12 +118,14 @@ class gitsync():
 				repo.git.checkout("master")
 				repo.remotes.origin.pull()
 			except Exception as e:
+				self.err=e
 				dest_path=""
 				print(e)
 		else:
 			try:
 				git.Repo.clone_from(repo,dest_path)
 			except Exception as e:
+				self.err=e
 				dest_path=""
 				print(e)
 		return dest_path
