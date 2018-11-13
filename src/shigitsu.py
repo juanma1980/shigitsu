@@ -208,10 +208,14 @@ def _write_log(error):
 			print("Log file %s couldn't be opened: %s"%(error_file,e))
 
 #### MAIN PROGRAM ####
+print("\nWelcome to %sShigitsu%s"%(color.RED,color.END))
+resp=input("Start sync [y/n]? ")
+if resp.lower()=='y':
+	_write_log("")
+	_write_log(":::::::::: INIT :::::::::")
+	for f in os.listdir(conf_dir):
+		repos_dict.update(_read_config("%s/%s"%(conf_dir,f)))
+	_process_repos(repos_dict)
+	_write_log(":::::::::: END :::::::::")
+	print("\nProcess finished!!")
 
-_write_log("")
-_write_log(":::::::::: INIT :::::::::")
-for f in os.listdir(conf_dir):
-	repos_dict.update(_read_config("%s/%s"%(conf_dir,f)))
-_process_repos(repos_dict)
-_write_log(":::::::::: END :::::::::")
