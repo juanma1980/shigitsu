@@ -28,20 +28,27 @@ class gitsync():
 		self.config=[]
 		self.dbg=True
 		self.debian_release="debian/bionic"
-		self.dest_path="/tmp/git/"
 		self.sync_result={}
-		self.commits_db="commits.sql"
+		self.commits_db="/usr/share/shigitsu/commits.sql"
 		self.err=None
-		self.error_file="error.log"
-		if not os.path.isdir(self.dest_path):
-			os.makedirs(self.dest_path)
 	#def __init__
 
 	def _debug(self,msg):
 		if self.dbg:
 			print("Debug: %s"%msg)
 
+	def set_dest_path(self,path):
+		self.config.update({'dest_path':path})
+
 	def sync(self):
+		if self.config['dest_path']:
+			if not os.path.isdir(self.config['dest_path']):
+				os.makedirs(self.config['dest_path'])
+		else:
+			self._debug("Theres no dest path")
+			self.sync_result.update({'ERROR':'Destination path is not set'})
+			return(self.sync_result)
+
 		self._set_db()
 		repos=self._list_repos(self.config['orig_url'])
 		not_whitelisted=[]
@@ -110,7 +117,7 @@ class gitsync():
 	#def _list_repos
 
 	def _get_repo(self,repo,repo_name):
-		dest_path="/tmp/git/%s"%repo_name
+		dest_path=self.config['dest_path']
 		self._debug("Cloning %s in %s"%(repo,dest_path))
 		if os.path.isdir(dest_path):
 			repo = git.Repo(dest_path)
@@ -124,6 +131,8 @@ class gitsync():
 		else:
 			try:
 				git.Repo.clone_from(repo,dest_path)
+				repo = git.Repo(dest_path)
+				repo.git.checkout("master")
 			except Exception as e:
 				self.err=e
 				dest_path=""
