@@ -79,28 +79,7 @@ class gitsync():
 		self.sync_result.update({'not_whitelisted':not_whitelisted})
 		self.sync_result.update({'blacklisted':blacklisted})
 		self.sync_result.update({'inconsistent':inconsistent})
-		self._write_log()
 		return self.sync_result
-
-	def _write_log(self):
-		try:
-			with open(self.error_file,'a') as f:
-				f.write("=============\n%s\n"%datetime.datetime.now().isoformat())
-				for key,value in self.sync_result.items():
-					f.write("%s:\n"%(key))
-					if type(value)==type([]):
-						for val in value:
-							if type(val)==type({}):
-								for value_key, value_val in val.items:
-									f.write(" * %s: %s\n"%(value_key,value_val))
-							else:
-								f.write("* %s\n"%(val))
-					else:
-						f.write("* %s\n"%(value))
-		except Exception as e:
-				print("Log file %s couldn't be opened: %s"%(self.error_file,e))
-
-
 
 	def set_config(self,conf_dict):
 		self.config=conf_dict
