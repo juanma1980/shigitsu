@@ -1,3 +1,9 @@
+shigitsu (0.2) xenial; urgency=medium
+
+  * Add no_master_branch error
+
+ -- Juanma Navarro Mañez <juanma1980@gmail.com>  Tue, 13 Nov 2018 13:38:20 +0100
+
 shigitsu (0.1) xenial; urgency=medium
 
   * Initial release.
