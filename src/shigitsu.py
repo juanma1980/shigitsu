@@ -26,6 +26,7 @@ conf_dir="/usr/share/shigitsu/config.d"
 error_file="/usr/share/shigitsu/shigitsu.log"
 #conf_file="./config.json"
 repos_dict={}
+default={}
 
 #Helper class for colorize text output
 class color:
@@ -57,8 +58,13 @@ def _error(error,level=1):
 	_write_log(err_msg)
 #def _error
 
-def _load_default_values(data):
-	default={}
+def	_read_default_config():
+	try:
+		with open("%s/defaults.json"%conf_dir) as f:
+			data=json.load(f)
+	except Exception as e:
+		_error("Default config could not be read: %s"%e)
+		sys.exit(1)
 	default.update({'minutes_between_sync':data['minutes_between_syncs']})
 	default.update({'dest_path':data['default_dest_path']})
 	default.update({'delete_when_processed':data['default_delete_when_processed']})
@@ -66,8 +72,7 @@ def _load_default_values(data):
 	default.update({'user_to_commit':data['default_user_to_commit']})
 	default.update({'blacklist':data['default_blacklist']})
 	default.update({'whitelist':data['default_whitelist']})
-	return (default)
-#def _load_default_values
+#def	_read_default_config
 
 def _read_config(conf_file):
 	repos_dict={}
@@ -81,8 +86,6 @@ def _read_config(conf_file):
 		return(repos_dict)
 
 	try:
-		default=_load_default_values(data['default'])
-
 		for repo,data in data['repositories'].items():
 			repo_aux={}
 			if 'disabled' in data.keys():
@@ -211,8 +214,11 @@ resp=input("Start sync [y/n]? ")
 if resp.lower()=='y':
 	_write_log("")
 	_write_log(":::::::::: INIT :::::::::")
+	_read_default_config()
+	print(default)
 	for f in os.listdir(conf_dir):
-		repos_dict.update(_read_config("%s/%s"%(conf_dir,f)))
+		if f!='defaults.json' and f.endswith('.json'):
+			repos_dict.update(_read_config("%s/%s"%(conf_dir,f)))
 	_process_repos(repos_dict)
 	_write_log(":::::::::: END :::::::::")
 	print("\nProcess finished!!")
