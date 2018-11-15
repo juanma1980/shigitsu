@@ -77,6 +77,7 @@ def	_read_default_config():
 	default.update({'whitelist':data['default_whitelist']})
 	default.update({'dest_url':data['default_dest_url']})
 	default.update({'dest_type':data['default_dest_type']})
+	default.update({'local_commits_db':data['local_commits_db']})
 #def	_read_default_config
 
 def _read_config(conf_file):
@@ -140,6 +141,8 @@ def _read_config(conf_file):
 				data['whitelist'].extend(default['whitelist'])
 			else:
 				data['whitelist']=default['whitelist']
+			if 'local_commits_db' in default.keys():
+				data['local_commits_db']=default['local_commits_db']
 			if _validate_config(data):
 				repos_dict.update({repo:data})
 				log_dir=data['download_path']

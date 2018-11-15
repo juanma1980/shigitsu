@@ -74,9 +74,10 @@ class gitsync():
 		no_master_branch=[]
 		sync_error=[]
 		if repos:
-			if 'message' in repos.keys():
-				self._debug("%s"%repos['message'])
-				self._debug("Ending process")
+			if (type(repos)==type({})):
+				if 'message' in repos.keys():
+					self._debug("%s"%repos['message'])
+				self._debug("Ending process. Bad response from Git")
 				sys.exit(1)				
 			for repo in repos:
 				self.err=''
@@ -129,6 +130,9 @@ class gitsync():
 	def set_config(self,conf_dict):
 		self.config=conf_dict
 		print(self.config)
+		if 'local_commits_db' in self.config.keys() and self.config['local_commits_db'].lower()=='true':
+			self.commits_db="%s/.commits.sql"%os.environ['HOME']
+
 	#def set_config
 
 	def _list_repos(self,repo_url):
@@ -274,30 +278,24 @@ class gitsync():
 			l_svn._CommonClient__password='karaj0ta'
 		sw_continue=True
 		if self.config['single_commit'].lower()=='true':
-			self._single_commit(debian_commits,repo_name,l_svn,r_svn)
+			self._single_commit(debian_commits,repo_name,repo,repo_path,l_svn,r_svn,svn_local_repo)
 		else:
-			self._incremental_commits(commits,repo_name,l_svn,svn)
+			self._incremental_commits(commits,debian_commits,master_commits,repo_name,repo,repo_path,l_svn,r_svn,svn_local_repo)
 	#def sync_commits
 
-	def _single_commits(self,commits,repo_name,local_svn,remote_svn):
-		last_commit_index=self._get_unpublished_commit(commits,repo_name)
-		if last_commit_index<0:
-			return
+	def _single_commits(self,commits,repo_name,repo,repo_path,local_svn,remote_svn,svn_local_repo):
+		unpublished_commits=self._get_unpublished_commit(commits,repo_name)
+		last_commit_key=list(unpublished_commits.keys())[-1]
+		commit_id=last_commit_key(' ')[-1]
+
 		repo.git.checkout(self.debian_release)
 		svnchanges=self._get_local_svn_changes(local_svn)
-		self._do_commit(svnchanges,commit_msg,repo_name,local_svn)
+		self._do_commit(svnchanges,commit_id,commit_msg,repo_name,local_svn,remote_svn)
 
-	def _incremental_commits(self,commits,repo_name,local_svn,remote_svn):
-		last_commit_index=self._get_unpublished_commit(commits,repo_name)
-		if last_commit_index<0:
-			return
-		print(type(commits))
-		unpublished_commits=commits[last_commit_index:]
+	def _incremental_commits(self,commits,debian_commits,master_commits,repo_name,repo,repo_path,local_svn,remote_svn,svn_local_repo):
+		unpublished_commits=self._get_unpublished_commit(commits,repo_name)
 		for commit,data in unpublished_commits.items():
 			commit_id=commit.split(' ')[-1]
-			if self._published_commit(commit_id):
-				continue
-			
 			commit_msg="%s: %s %s %s"%(commit_id,data['msg'],data['date'],data['author'])
 			repo.git.checkout(commit_id)
 			self._debug("Copying data from %s to %s"%(repo_path,svn_local_repo))
@@ -308,16 +306,16 @@ class gitsync():
 					os.remove("%s/%s"%(svn_local_repo,f))
 			self._copy_data(repo_path,svn_local_repo)
 			self._debug("Accesing local svn at %s"%svn_local_repo)
-			svnchanges=self._get_local_svn_changes(localsvn)
+			svnchanges=self._get_local_svn_changes(local_svn,commit,debian_commits,master_commits)
 			self._debug("Commit %s"%commit_msg)
-			self._do_commit(svnchanges,commit_msg,repo_name,local_svn)
+			self._do_commit(svnchanges,commit_id,commit_msg,repo_name,local_svn,remote_svn)
 
 	def _get_unpublished_commit(self,commits,repo_name):
 		sw_continue=True
-		index=0
+		unpublished_commits={}
+		last_commit=self._get_last_commit(repo_name)
 		for commit,data in commits.items():
 			commit_id=commit.split(' ')[-1]
-			last_commit=self._get_last_commit(repo_name)
 			if last_commit and sw_continue:
 				self._debug("Skipping commit %s || %s"%(commit_id,last_commit))
 				if last_commit!=commit_id:
@@ -326,53 +324,59 @@ class gitsync():
 					sw_continue=False
 					continue
 			else:
+				unpublished_commits.update({commit:data})
 				sw_continue=False
-			index+=1
-		if last_commit==commit_id:
-			index=-1
-		return index
+		return unpublished_commits
 
-	def _get_local_svn_changes(self,localsvn):
+	def _get_local_svn_changes(self,local_svn,commit=None,debian_commits=None,master_commits=None):
 		files_to_del=[]
 		files_to_add=[]
 		localchanges={}
-		try:
-			for st in local_svn.status():
-				if st.type_raw_name=='unversioned':
-					f=st.name
-					if '@' in f:
-						f="%s@"%f
+		for st in local_svn.status():
+			if st.type_raw_name=='unversioned':
+				f=st.name
+				if '@' in f:
+					f="%s@"%f
+				if commit:
 					if ("debian" in f or "docs" in f) and commit not in debian_commits.keys():
 						pass
 					else:
-						files_to_add(f)
-				if st.type_raw_name=='missing':
-					f=st.name
+						files_to_add.append(f)
+				else:
+					files_to_add.append(f)
+			if st.type_raw_name=='missing':
+				f=st.name
+				if commit:
 					if ("debian" in f or "docs" in f) and commit in master_commits.keys():
 						pass
 					else:
 						if '@' in f:
 							f="%s@"%f
 						files_to_del.append(f)
-		except Exception as e:
-			print(e)
+				else:
+					if '@' in f:
+						f="%s@"%f
+					files_to_del.append(f)
 		localchanges.update({'add':files_to_add})
 		localchanges.update({'del':files_to_del})
 		return(localchanges)
 
-	def _do_commit(self,svnchanges,commit_msg,repo_name,local_svn):
+	def _do_commit(self,svnchanges,commit_id,commit_msg,repo_name,local_svn,remote_svn):
 		if svnchanges['del']:
 			svnchanges['del'].sort(key = len,reverse=True)
 			svnchanges['del'].append('--force')
 			local_svn.run_command('delete',svnchanges['del'])
+			remote_svn.run_command('delete',svnchanges['del'])
 		if svnchanges['add']:
-			local_svn.add(svnchanges['add'])
+			for f in svnchanges['add']:
+				local_svn.add(f)
 		try:
 			local_svn.commit(commit_msg)
 			self._write_info(repo_name,commit_id)
 		except Exception as e:
 			try:
-				self._debug("Error syncing. Updating svn")
+				self._debug("Error syncing: %s"%e)
+				self._debug("Updating svn")
 				local_svn.update()
 				local_svn.commit(commit_msg)
 			except Exception as e:
@@ -384,7 +388,7 @@ class gitsync():
 
 	def _chk_svn_dir(self,repo_name,r_svn):
 		sw_ok=True
-		svn_tmpdir="/tmp/svn/%s"%repo_name
+		svn_tmpdir="%s/tmp/svn/%s"%(self.config['download_path'],repo_name)
 		try:
 			os.makedirs(svn_tmpdir)
 		except Exception as e:
@@ -421,9 +425,8 @@ class gitsync():
 										ignore)
 		else:
 			try:
-				if f not in ignored or '.git' not in f:
-					shutil.copyfile(src, dest)
-					shutil.copystat(src,dest)
+				shutil.copyfile(src, dest)
+				shutil.copystat(src,dest)
 			except:	
 				pass
 	#def _copy_data
@@ -436,13 +439,12 @@ class gitsync():
 			try:
 				os.makedirs(os.path.dirname(self.commits_db))
 			except Exception as e:
-				#self._debug(e)
-				pass
+				self._debug(e)
 		try:
 			self.db=sqlite3.connect(self.commits_db)
 		except Exception as e:
-			#self._debug(e)
-			pass
+			self._debug(e)
+			self._debug(self.commits_db)
 		self.db_cursor=self.db.cursor()
 		if sw_db_exists==False:
 			#self._debug("Creating cache table")
