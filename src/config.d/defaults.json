@@ -1,6 +1,6 @@
 {
 		"minutes_between_syncs":"60", 
-		"default_dest_path":"",
+		"default_download_path":"",
 		"default_delete_when_processed":"False",
 		"default_single_commit":"False",
 		"default_user_to_commit":"",

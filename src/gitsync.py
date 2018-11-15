@@ -26,37 +26,44 @@ class gitsync():
 
 	def __init__(self,*args,**kwargs):
 		self.config=[]
+		self.log="/tmp/gitsync.log"
 		self.dbg=True
+		if self.dbg:
+			f=open(self.log,'w')
+			f.close()
 		self.debian_release="debian/bionic"
 		self.sync_result={}
 		self.commits_db="/usr/share/shigitsu/commits.sql"
 		self.err=None
+		self.time_between_syncs=2
 	#def __init__
 
 	def _debug(self,msg):
 		if self.dbg:
 			print("Debug: %s"%msg)
+			with open(self.log,'a') as f:
+				f.write("%s\n"%msg)
 	#def _debug
+	
+	def set_download_path(self,path):
+		self.config.update({'download_path':path})
+	#def set_download_path
 
-	def set_dest_path(self,path):
-		self.config.update({'dest_path':path})
-	#def set_dest_path
-
-	def set_dest_path(self,path):
-		self.config.update({'dest_path':path})
+	def set_download_path(self,path):
+		self.config.update({'download_path':path})
 
 	def sync(self):
-		if self.config['dest_path']:
-			if not os.path.isdir(self.config['dest_path']):
+		if self.config['download_path']:
+			if not os.path.isdir(self.config['download_path']):
 				try:
-					os.makedirs(self.config['dest_path'])
+					os.makedirs(self.config['download_path'])
 				except Exception as e:
 					self._debug(e)
-					self.sync_result.update({'ERROR':'Destination path could not be created'})
+					self.sync_result.update({'ERROR':'Download path could not be created'})
 					return(self.sync_result)
 		else:
 			self._debug("Theres no dest path")
-			self.sync_result.update({'ERROR':'Destination path is not set'})
+			self.sync_result.update({'ERROR':'Download path is not set'})
 			return(self.sync_result)
 
 		self._set_db()
@@ -65,19 +72,25 @@ class gitsync():
 		blacklisted=[]
 		inconsistent=[]
 		no_master_branch=[]
+		sync_error=[]
 		if repos:
+			if 'message' in repos.keys():
+				self._debug("%s"%repos['message'])
+				self._debug("Ending process")
+				sys.exit(1)				
 			for repo in repos:
+				self.err=''
 				repo_name=repo['clone_url'].split('/')[-1].replace('.git','')
-				print("Analyzing %s"%repo_name)
+				self._debug("Analyzing %s"%repo_name)
 				if self.config['whitelist']:
 					if repo_name not in self.config['whitelist']:
-						print("Not in whitelist %s"%repo_name)
+						self._debug("Not in whitelist %s"%repo_name)
 						not_whitelisted.append(repo_name)
 						continue
 				if self.config['blacklist']:
 					if repo_name in self.config['blacklist']:
 						blacklisted.append(repo_name)
-						print("Blacklisted %s"%repo_name)
+						self._debug("Blacklisted %s"%repo_name)
 						continue
 					else:
 						sw_match=False
@@ -91,22 +104,31 @@ class gitsync():
 				repo_path=self._get_repo(repo['clone_url'],repo_name)
 				if repo_path:
 					if self._check_repo_consistency(repo_path):
-						self._sync_repo(repo_path,repo_name)
+						if 'user_to_commit' in self.config.keys() and self.config['user_to_commit']:
+							self._debug("user_to_commit: %s"%self.config['user_to_commit'])
+						if not self._sync_repo(repo_path,repo_name):
+							sync_error.append({repo_name:self.err})
 					else:
 						inconsistent.append({repo_name:self.err})
-						print("Discard for inconsistency %s"%repo_name)
+						self._debug("Discard for inconsistency %s"%repo_name)
 				else:
 					no_master_branch.append({repo_name:self.err})
-					print("Discard for no master branch %s"%repo_name)
+					self._debug("Discard for no master branch %s"%repo_name)
+				if self.config['delete_when_processed'].lower()=='true' and not self.err:
+					shutil.rmtree("%s/%s"%(self.config['download_path'],repo_name))
+					shutil.rmtree(repo_path)
+				time.sleep(self.time_between_syncs)
 		self.sync_result.update({'not_whitelisted':not_whitelisted})
 		self.sync_result.update({'blacklisted':blacklisted})
 		self.sync_result.update({'inconsistent':inconsistent})
 		self.sync_result.update({'no_master_branch':no_master_branch})
+		self.sync_result.update({'syncing_error':sync_error})
 		return self.sync_result
 	#def sync
 
 	def set_config(self,conf_dict):
 		self.config=conf_dict
+		print(self.config)
 	#def set_config
 
 	def _list_repos(self,repo_url):
@@ -129,27 +151,27 @@ class gitsync():
 	#def _list_repos
 
 	def _get_repo(self,repo,repo_name):
-		dest_path="%s/%s"%(self.config['dest_path'],repo_name)
-		self._debug("Cloning %s in %s"%(repo,dest_path))
-		if os.path.isdir(dest_path):
-			repo = git.Repo(dest_path)
+		download_path="%s/%s"%(self.config['download_path'],repo_name)
+		self._debug("Cloning %s in %s"%(repo,download_path))
+		if os.path.isdir(download_path):
+			repo = git.Repo(download_path)
 			try:
 				repo.git.checkout("master")
 				repo.remotes.origin.pull()
 			except Exception as e:
 				self.err=e
-				dest_path=""
+				download_path=""
 				print(e)
 		else:
 			try:
-				git.Repo.clone_from(repo,dest_path)
-				repo = git.Repo(dest_path)
+				git.Repo.clone_from(repo,download_path)
+				repo = git.Repo(download_path)
 				repo.git.checkout("master")
 			except Exception as e:
 				self.err=e
-				dest_path=""
+				download_path=""
 				print(e)
-		return dest_path
+		return download_path
 	#def _get_git_repo
 
 	def _check_repo_consistency(self,repo_path):
@@ -228,27 +250,53 @@ class gitsync():
 		debian_commits=self._get_commits(repo_path,self.debian_release)
 		svn_url="%s/%s"%(self.config['dest_url'],repo_name)
 		try:
-			subprocess.run(["svn","mkdir",svn_url,"-m","Create repo"])
+			self._debug("Checkout subversion")
+			if 'user_to_commit' in self.config.keys() and self.config['user_to_commit']:
+				self._debug("user_to_commit: %s"%self.config['user_to_commit'])
+				subprocess.run(["svn","mkdir",svn_url,"-m","Create repo","--username",self.config['user_to_commit'],'--password','karaj0ta'],check=True)
+			else:
+				subprocess.run(["svn","mkdir",svn_url,"-m","Create repo"],check=True)
+		except subprocess.CalledProcessError as e:
+			print(e.stderr)
 		except Exception as e:
 			print(e)
 		self._debug("Connecting to svn at %s"%svn_url)
 		r_svn=svn.remote.RemoteClient(svn_url)
+		if 'user_to_commit' in self.config.keys() and self.config['user_to_commit']:
+			self._debug("user_to_commit: %s"%self.config['user_to_commit'])
+			r_svn._CommonClient__username=self.config['user_to_commit']
+			r_svn._CommonClient__password='karaj0ta'
 		svn_local_repo=self._chk_svn_dir(repo_name,r_svn)
 		l_svn_base_path="%s/../../"%svn_local_repo
 		l_svn=svn.local.LocalClient(l_svn_base_path)
+		if 'user_to_commit' in self.config.keys() and self.config['user_to_commit']:
+			l_svn._CommonClient__username=self.config['user_to_commit']
+			l_svn._CommonClient__password='karaj0ta'
 		sw_continue=True
-		for commit,data in commits.items():
+		if self.config['single_commit'].lower()=='true':
+			self._single_commit(debian_commits,repo_name,l_svn,r_svn)
+		else:
+			self._incremental_commits(commits,repo_name,l_svn,svn)
+	#def sync_commits
+
+	def _single_commits(self,commits,repo_name,local_svn,remote_svn):
+		last_commit_index=self._get_unpublished_commit(commits,repo_name)
+		if last_commit_index<0:
+			return
+		repo.git.checkout(self.debian_release)
+		svnchanges=self._get_local_svn_changes(local_svn)
+		self._do_commit(svnchanges,commit_msg,repo_name,local_svn)
+
+	def _incremental_commits(self,commits,repo_name,local_svn,remote_svn):
+		last_commit_index=self._get_unpublished_commit(commits,repo_name)
+		if last_commit_index<0:
+			return
+		print(type(commits))
+		unpublished_commits=commits[last_commit_index:]
+		for commit,data in unpublished_commits.items():
 			commit_id=commit.split(' ')[-1]
-			last_commit=self._get_last_commit(repo_name)
-			if last_commit and sw_continue:
-				print("Skipping commit %s || %s"%(commit_id,last_commit))
-				if last_commit!=commit_id:
-					continue
-				else:
-					sw_continue=False
-					continue
-			else:
-				sw_continue=False
+			if self._published_commit(commit_id):
+				continue
 			
 			commit_msg="%s: %s %s %s"%(commit_id,data['msg'],data['date'],data['author'])
 			repo.git.checkout(commit_id)
@@ -260,40 +308,79 @@ class gitsync():
 					os.remove("%s/%s"%(svn_local_repo,f))
 			self._copy_data(repo_path,svn_local_repo)
 			self._debug("Accesing local svn at %s"%svn_local_repo)
-			files_to_del=[]
-			try:
-				for st in l_svn.status():
-					if st.type_raw_name=='unversioned':
-						f=st.name
+			svnchanges=self._get_local_svn_changes(localsvn)
+			self._debug("Commit %s"%commit_msg)
+			self._do_commit(svnchanges,commit_msg,repo_name,local_svn)
+
+	def _get_unpublished_commit(self,commits,repo_name):
+		sw_continue=True
+		index=0
+		for commit,data in commits.items():
+			commit_id=commit.split(' ')[-1]
+			last_commit=self._get_last_commit(repo_name)
+			if last_commit and sw_continue:
+				self._debug("Skipping commit %s || %s"%(commit_id,last_commit))
+				if last_commit!=commit_id:
+					continue
+				else:
+					sw_continue=False
+					continue
+			else:
+				sw_continue=False
+			index+=1
+		if last_commit==commit_id:
+			index=-1
+		return index
+
+	def _get_local_svn_changes(self,localsvn):
+		files_to_del=[]
+		files_to_add=[]
+		localchanges={}
+		try:
+			for st in local_svn.status():
+				if st.type_raw_name=='unversioned':
+					f=st.name
+					if '@' in f:
+						f="%s@"%f
+					if ("debian" in f or "docs" in f) and commit not in debian_commits.keys():
+						pass
+					else:
+						files_to_add(f)
+				if st.type_raw_name=='missing':
+					f=st.name
+					if ("debian" in f or "docs" in f) and commit in master_commits.keys():
+						pass
+					else:
 						if '@' in f:
 							f="%s@"%f
-						if ("debian" in f or "docs" in f) and commit in debian_commits.keys():
-							l_svn.add(f)
-					if st.type_raw_name=='missing':
-						f=st.name
-						if ("debian" in f or "docs" in f) and commit in master_commits.keys():
-							pass
-						else:
-							if '@' in f:
-								f="%s@"%f
-							files_to_del.append(f)
-			except Exception as e:
-				print(e)
-			self._debug("Commit %s"%commit_msg)
-			if files_to_del:
-				files_to_del.sort(key = len)
-				l_svn.run_command('delete',files_to_del)
-				r_svn.run_command('delete',files_to_del)
+						files_to_del.append(f)
+		except Exception as e:
+			print(e)
+		localchanges.update({'add':files_to_add})
+		localchanges.update({'del':files_to_del})
+		return(localchanges)
+
+	def _do_commit(self,svnchanges,commit_msg,repo_name,local_svn):
+		if svnchanges['del']:
+			svnchanges['del'].sort(key = len,reverse=True)
+			svnchanges['del'].append('--force')
+			local_svn.run_command('delete',svnchanges['del'])
+		if svnchanges['add']:
+			local_svn.add(svnchanges['add'])
+		try:
+			local_svn.commit(commit_msg)
+			self._write_info(repo_name,commit_id)
+		except Exception as e:
 			try:
-				l_svn.commit(commit_msg)
-				self._write_info(repo_name,commit_id)
+				self._debug("Error syncing. Updating svn")
+				local_svn.update()
+				local_svn.commit(commit_msg)
 			except Exception as e:
-				print("ERROR")
-				print(e)
+				self.err=e
+				self._debug("Error processing %s"%repo_name)
+				self._debug(e)
 				for k in master_commits.keys():
-					print(k)
-				sys.exit(0)
-	#def sync_commits
+					self._debug(k)
 
 	def _chk_svn_dir(self,repo_name,r_svn):
 		sw_ok=True
@@ -303,7 +390,11 @@ class gitsync():
 		except Exception as e:
 			print(e)
 		self._debug("Checkout subversion")
-		r_svn.checkout(svn_tmpdir)
+		try:
+			r_svn.checkout(svn_tmpdir)
+		except:
+			self._debug("Repo %s doesn't exists"%repo_name)
+			pass
 		if not os.path.isdir("%s/trunk/fuentes"%svn_tmpdir):
 			os.makedirs("%s/trunk/fuentes"%svn_tmpdir)
 			os.makedirs("%s/trunk/docs"%svn_tmpdir)
@@ -330,8 +421,9 @@ class gitsync():
 										ignore)
 		else:
 			try:
-				shutil.copyfile(src, dest)
-				shutil.copystat(src,dest)
+				if f not in ignored or '.git' not in f:
+					shutil.copyfile(src, dest)
+					shutil.copystat(src,dest)
 			except:	
 				pass
 	#def _copy_data
