@@ -22,7 +22,7 @@ config.d/defaults.json
 * "local_commits_db":"" -> If true the database with the commits will be stored in the user's home. If false it will be stored at /usr/share/shigitsu
 
 ### Repositories config:
-
+```
 {
 	"repositories":
 	{
@@ -42,4 +42,6 @@ config.d/defaults.json
 		}
 	}
 }
+
+```
 
