@@ -28,6 +28,8 @@ log_file="shigitsu.log"
 #conf_file="./config.json"
 repos_dict={}
 default={}
+username=''
+password=''
 
 #Helper class for colorize text output
 class color:
@@ -55,9 +57,13 @@ def _error(error,level=1):
 	else:
 		msg=("%sWarning:%s %s"%(color.YELLOW,color.END,error))
 		err_msg=("Warning: %s"%(error))
-	print(msg)
+	_print(msg)
 	_write_log(err_msg)
 #def _error
+
+def _print(msg):
+	if sw_unattended==False:
+		print("%s"%msg)
 
 def	_read_default_config():
 	global log_dir
@@ -82,6 +88,8 @@ def	_read_default_config():
 
 def _read_config(conf_file):
 	global log_dir
+	global username
+	global password
 	repos_dict={}
 	try:
 		with open(conf_file) as f:
@@ -125,9 +133,13 @@ def _read_config(conf_file):
 				else:
 					_error("%s: Setting default dest path %s"%(repo,default['download_path']),0)
 					data.update({"download_path":default['download_path']})
-			if 	not "user_to_commit" in data.keys() or not data['user_to_commit']:
+			if username:
+				data.update({"user_to_commit":username})
+			elif not "user_to_commit" in data.keys() or not data['user_to_commit']:
 				_error("%s: Setting default user %s"%(repo,default['user_to_commit']),0)
 				data.update({"user_to_commit":default['user_to_commit']})
+			if password:
+				data.update({"password":password})
 			if 	not "single_commit" in data.keys() or not data['single_commit']:
 				data.update({"single_commit":default['single_commit']})
 			if 	not "delete_when_processed" in data.keys() or not data['delete_when_processed']:
@@ -147,7 +159,7 @@ def _read_config(conf_file):
 				repos_dict.update({repo:data})
 				log_dir=data['download_path']
 	except Exception as e:
-		print("Error configuring %s"%(e))
+		_print("Error configuring %s"%(e))
 	_write_log("")
 	_write_log(":::::::::: INIT :::::::::")
 	return repos_dict	
@@ -180,21 +192,21 @@ def _process_repos(repos_dict):
 	for repo,data in repos_dict.items():
 		if sync_repos:
 			data.update({'whitelist':sync_repos})
-		print("Processing %s"%repo)
+		_print("Processing %s"%repo)
 		_write_log("Processing %s"%repo)
-		print("Repo type: %s"%data['orig_type'])
+		_print("Repo type: %s"%data['orig_type'])
 		_write_log("Repo type: %s"%data['orig_type'])
-		print("Repo dest: %s"%data['dest_url'])
+		_print("Repo dest: %s"%data['dest_url'])
 		_write_log("Repo dest: %s"%data['dest_url'])
-		print("Repo dest type: %s"%data['dest_type'])
+		_print("Repo dest type: %s"%data['dest_type'])
 		_write_log("Repo dest type: %s"%data['dest_type'])
-		print("Repo username: %s"%data['user_to_commit'])
+		_print("Repo username: %s"%data['user_to_commit'])
 		_write_log("Repo username: %s"%data['user_to_commit'])
-		print("Blacklist: %s"%data['blacklist'])
+		_print("Blacklist: %s"%data['blacklist'])
 		_write_log("Blacklist: %s"%data['blacklist'])
-		print("Whitelist: %s"%data['whitelist'])
+		_print("Whitelist: %s"%data['whitelist'])
 		_write_log("Whitelist: %s"%data['whitelist'])
-		print("----------")
+		_print("----------")
 		_write_log("----------")
 		if data['orig_type'].lower()=='git':
 			sync_repo=gitsync.gitsync(force=sw_force)
@@ -223,7 +235,8 @@ def _write_result_log(sync_result):
 					else:
 						f.write("  * %s\n"%(value))
 	except Exception as e:
-			print("Log file %s couldn't be opened: %s"%(log_file,e))
+			_error("Log file %s couldn't be opened: %s"%(log_file,e))
+			_write_log("Log file %s couldn't be opened: %s"%(log_file,e))
 
 
 def _write_log(msg):
@@ -235,27 +248,76 @@ def _write_log(msg):
 			else:
 				f.write("\n")
 	except Exception as e:
-		print("Log file %s couldn't be opened: %s"%(log_file,e))
-		print("Log Msg: %s"%msg)
+		_error("Log file %s couldn't be opened: %s"%(log_file,e))
+		_error("Log Msg: %s"%msg)
 
-#### MAIN PROGRAM ####
-print("\nWelcome to %sShigitsu%s"%(color.RED,color.END))
-sync_repos=[]
-sw_force=False
-if (sys.argv):
-	for arg in sys.argv[1:]:
-		if arg=='--force':
-			sw_force=True
-		else:
-			sync_repos.append(arg)
-resp=input("Start sync [y/n]? ")
-if resp.lower()=='y':
+def _init():
 	_read_default_config()
-	print(default)
 	for f in os.listdir(conf_dir):
 		if f!='defaults.json' and f.endswith('.json'):
 			repos_dict.update(_read_config("%s/%s"%(conf_dir,f)))
 	_process_repos(repos_dict)
 	_write_log(":::::::::: END :::::::::")
-	print("\nProcess finished!!")
+	_print("\nProcess finished!!")
 
+def _help():
+	print("Usage: shigitsu [-u|--unattended] [-f|--force] [repo_to_sync] --username username --pasword password")
+	print("Synchronizes git with svn")
+	print("")
+	print("Options:")
+	print(" -u | --unattended: Shigitsu will assume yes to all questions")
+	print(" -f | --force: Shigitsu will force the synchronization resetting the svn dir and re-commiting all git commits")
+	print(" repo_to_sync: If present Shigitsu will only sync repo_to_sync despite the conf file.")
+	print(" --username username: User for the svn repository (optional)")
+	print(" --password password: Password of the user (optional)")
+	print("If no username nor password are provided then:")
+	print (" 1) Must be a mapping between git users and svn users at passwords file")
+	print (" 2) If that's not the case then a valid username must exists at config files or be provided and a valid password must be present at passwords file or as argument")
+	print("")
+	print("Examples")
+	print("Normal execution")
+	print("./shigitsu")
+	print("Force sync of foo")
+	print("./shigitu --force foo")
+	print("Unattended execution forcing all repos")
+	print("./shigitsu -u --force")
+	print("Unattended execution forcing user and password")
+	print("./shigitsu -u --username Joe --password sixpack")
+	print("")
+	sys.exit(0)
+
+#### MAIN PROGRAM ####
+sync_repos=[]
+sw_force=False
+sw_unattended=False
+if (sys.argv):
+	sw_user=False
+	sw_pwd=False
+	for arg in sys.argv[1:]:
+		if sw_user:
+			username=arg
+			sw_user=False
+			continue
+		if sw_pwd:
+			password=arg
+			sw_pwd=False
+			continue
+		if arg=='--force' or arg=='f':
+			sw_force=True
+		elif arg=='-u' or arg=='--unattended':
+			sw_unattended=True
+		elif arg=='--username':
+			sw_user=True
+		elif arg=='--password':
+			sw_pwd=True
+		elif arg.startswith('-'):
+			_help()
+		else:
+			sync_repos.append(arg)
+if sw_unattended==False:
+	print("\nWelcome to %sShigitsu%s"%(color.RED,color.END))
+	resp=input("Start sync [y/n]? ")
+	if resp.lower()=='y':
+		_init()
+else:
+	_init()
