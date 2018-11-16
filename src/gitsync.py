@@ -36,6 +36,10 @@ class gitsync():
 		self.commits_db="/usr/share/shigitsu/commits.sql"
 		self.err=None
 		self.time_between_syncs=2
+		self.force=False
+		if 'force' in kwargs.keys():
+			self.force=kwargs['force']
+		self.svn_dir_postfix="/tmp/svn/"
 	#def __init__
 
 	def _debug(self,msg):
@@ -284,7 +288,16 @@ class gitsync():
 	#def sync_commits
 
 	def _single_commits(self,commits,repo_name,repo,repo_path,local_svn,remote_svn,svn_local_repo):
-		unpublished_commits=self._get_unpublished_commit(commits,repo_name)
+		if self.force:
+			unpublished_commits=commits.copy()
+			self._debug("Reset content of %s"%svn_local_repo)
+			shutil.rmtree("%s"%svn_local_repo)
+			os.makedirs(svn_local_repo)
+			remote_svn.checkout(repo_name)
+			local_svn.run_command("delete",["*"])
+			local_svn.commit("Reset repository contents")
+		else:
+			unpublished_commits=self._get_unpublished_commit(commits,repo_name)
 		last_commit_key=list(unpublished_commits.keys())[-1]
 		commit_id=last_commit_key(' ')[-1]
 
@@ -293,7 +306,26 @@ class gitsync():
 		self._do_commit(svnchanges,commit_id,commit_msg,repo_name,local_svn,remote_svn)
 
 	def _incremental_commits(self,commits,debian_commits,master_commits,repo_name,repo,repo_path,local_svn,remote_svn,svn_local_repo):
-		unpublished_commits=self._get_unpublished_commit(commits,repo_name)
+		if self.force:
+			svn_tmpdir="%s%s%s"%(self.config['download_path'],self.svn_dir_postfix,repo_name)
+			self._debug("Reset content of %s"%svn_tmpdir)
+			shutil.rmtree("%s"%svn_tmpdir)
+			svn_local_repo=self._chk_svn_dir(repo_name,remote_svn)
+			l_svn_base_path="%s/../../"%svn_local_repo
+			local_svn=svn.local.LocalClient(l_svn_base_path)
+			if 'user_to_commit' in self.config.keys() and self.config['user_to_commit']:
+				local_svn._CommonClient__username=self.config['user_to_commit']
+				local_svn._CommonClient__password='karaj0ta'
+			remote_svn.checkout(repo_name)
+			svnchanges=self._get_local_svn_changes(local_svn)
+			self._debug("Reset repo")
+			self._do_commit(svnchanges,"1","Reset repository",repo_name,local_svn,remote_svn)
+			local_svn.add("delete",["%s/../../*"%svn_local_repo])
+			local_svn.run_command("delete",["%s/../../*"%svn_local_repo])
+			local_svn.commit("Reset repository contents")
+			unpublished_commits=commits.copy()
+		else:
+			unpublished_commits=self._get_unpublished_commit(commits,repo_name)
 		for commit,data in unpublished_commits.items():
 			commit_id=commit.split(' ')[-1]
 			commit_msg="%s: %s %s %s"%(commit_id,data['msg'],data['date'],data['author'])
@@ -357,6 +389,22 @@ class gitsync():
 					if '@' in f:
 						f="%s@"%f
 					files_to_del.append(f)
+			if st.type_raw_name=='obstructed':
+				self._debug("Obstructed file: %s"%f)
+				self._debug("Now I'll attempt to:")
+				self._debug("1) Make a cleanup")
+				self._debug("2) Move %s to /tmp"%f)
+				self._debug("3) Create a new commit")
+				self._debug("4) Add again %s"%f)
+				local_svn.cleanup()
+				dir_f=os.path.dirname(f)
+				name_f=os.path.basename(f)
+				shutil.move(f,"/tmp/%s"%name_f)
+				local_svn.run_command('delete',[f])
+				local_svn.commit("Obstructed file %s"%f)
+				shutil.move("/tmp/%s"%name_f,"%s"%dir_name)
+				files_to_add.append(f)
+				
 		localchanges.update({'add':files_to_add})
 		localchanges.update({'del':files_to_del})
 		return(localchanges)
@@ -364,9 +412,9 @@ class gitsync():
 	def _do_commit(self,svnchanges,commit_id,commit_msg,repo_name,local_svn,remote_svn):
 		if svnchanges['del']:
 			svnchanges['del'].sort(key = len,reverse=True)
-			svnchanges['del'].append('--force')
-			local_svn.run_command('delete',svnchanges['del'])
+			svnchanges['del'].append('--keep-local')
 			remote_svn.run_command('delete',svnchanges['del'])
+			local_svn.run_command('delete',svnchanges['del'])
 		if svnchanges['add']:
 			for f in svnchanges['add']:
 				local_svn.add(f)
@@ -388,7 +436,7 @@ class gitsync():
 
 	def _chk_svn_dir(self,repo_name,r_svn):
 		sw_ok=True
-		svn_tmpdir="%s/tmp/svn/%s"%(self.config['download_path'],repo_name)
+		svn_tmpdir="%s%s%s"%(self.config['download_path'],self.svn_dir_postfix,repo_name)
 		try:
 			os.makedirs(svn_tmpdir)
 		except Exception as e:

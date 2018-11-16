@@ -178,6 +178,8 @@ def _validate_config(repo_dict):
 def _process_repos(repos_dict):
 	sync_result={}
 	for repo,data in repos_dict.items():
+		if sync_repos:
+			data.update({'whitelist':sync_repos})
 		print("Processing %s"%repo)
 		_write_log("Processing %s"%repo)
 		print("Repo type: %s"%data['orig_type'])
@@ -190,12 +192,14 @@ def _process_repos(repos_dict):
 		_write_log("Repo username: %s"%data['user_to_commit'])
 		print("Blacklist: %s"%data['blacklist'])
 		_write_log("Blacklist: %s"%data['blacklist'])
+		print("Whitelist: %s"%data['whitelist'])
+		_write_log("Whitelist: %s"%data['whitelist'])
 		print("----------")
 		_write_log("----------")
 		if data['orig_type'].lower()=='git':
-			sync_repo=gitsync.gitsync()
+			sync_repo=gitsync.gitsync(force=sw_force)
 		elif data['orig_type'].lower()=='svn':
-			sync_repo=svnsync.svnsync()
+			sync_repo=svnsync.svnsync(force=sw_force)
 		sync_repo.set_config(data)
 		sync_result.update({repo:sync_repo.sync()})
 	_write_result_log(sync_result)
@@ -236,6 +240,14 @@ def _write_log(msg):
 
 #### MAIN PROGRAM ####
 print("\nWelcome to %sShigitsu%s"%(color.RED,color.END))
+sync_repos=[]
+sw_force=False
+if (sys.argv):
+	for arg in sys.argv[1:]:
+		if arg=='--force':
+			sw_force=True
+		else:
+			sync_repos.append(arg)
 resp=input("Start sync [y/n]? ")
 if resp.lower()=='y':
 	_read_default_config()
