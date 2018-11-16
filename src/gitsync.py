@@ -36,10 +36,17 @@ class gitsync():
 		self.commits_db="/usr/share/shigitsu/commits.sql"
 		self.err=None
 		self.time_between_syncs=2
+		self.force=False
+		if 'force' in kwargs.keys():
+			self.force=kwargs['force']
+		self.svn_dir_postfix="/tmp/svn/"
 	#def __init__
 
 	def _debug(self,msg):
 		if self.dbg:
+			if (type(msg)==type('')):
+				if '--password' in msg:
+					msg=re.sub(r"'--password', '.*?'","'--password', '#####'",msg)
 			print("Debug: %s"%msg)
 			with open(self.log,'a') as f:
 				f.write("%s\n"%msg)
@@ -257,7 +264,7 @@ class gitsync():
 			self._debug("Checkout subversion")
 			if 'user_to_commit' in self.config.keys() and self.config['user_to_commit']:
 				self._debug("user_to_commit: %s"%self.config['user_to_commit'])
-				subprocess.run(["svn","mkdir",svn_url,"-m","Create repo","--username",self.config['user_to_commit'],'--password','karaj0ta'],check=True)
+				subprocess.run(["svn","mkdir",svn_url,"-m","Create repo","--username",self.config['user_to_commit'],'--password',self.config['password']],check=True)
 			else:
 				subprocess.run(["svn","mkdir",svn_url,"-m","Create repo"],check=True)
 		except subprocess.CalledProcessError as e:
@@ -269,13 +276,13 @@ class gitsync():
 		if 'user_to_commit' in self.config.keys() and self.config['user_to_commit']:
 			self._debug("user_to_commit: %s"%self.config['user_to_commit'])
 			r_svn._CommonClient__username=self.config['user_to_commit']
-			r_svn._CommonClient__password='karaj0ta'
+			r_svn._CommonClient__password=self.config['password']
 		svn_local_repo=self._chk_svn_dir(repo_name,r_svn)
 		l_svn_base_path="%s/../../"%svn_local_repo
 		l_svn=svn.local.LocalClient(l_svn_base_path)
 		if 'user_to_commit' in self.config.keys() and self.config['user_to_commit']:
 			l_svn._CommonClient__username=self.config['user_to_commit']
-			l_svn._CommonClient__password='karaj0ta'
+			l_svn._CommonClient__password=self.config['password']
 		sw_continue=True
 		if self.config['single_commit'].lower()=='true':
 			self._single_commit(debian_commits,repo_name,repo,repo_path,l_svn,r_svn,svn_local_repo)
@@ -284,7 +291,11 @@ class gitsync():
 	#def sync_commits
 
 	def _single_commits(self,commits,repo_name,repo,repo_path,local_svn,remote_svn,svn_local_repo):
-		unpublished_commits=self._get_unpublished_commit(commits,repo_name)
+		if self.force:
+			local_svn=self._reset_repo(repo_name,remote_svn)
+			unpublished_commits=commits.copy()
+		else:
+			unpublished_commits=self._get_unpublished_commit(commits,repo_name)
 		last_commit_key=list(unpublished_commits.keys())[-1]
 		commit_id=last_commit_key(' ')[-1]
 
@@ -293,7 +304,11 @@ class gitsync():
 		self._do_commit(svnchanges,commit_id,commit_msg,repo_name,local_svn,remote_svn)
 
 	def _incremental_commits(self,commits,debian_commits,master_commits,repo_name,repo,repo_path,local_svn,remote_svn,svn_local_repo):
-		unpublished_commits=self._get_unpublished_commit(commits,repo_name)
+		if self.force:
+			local_svn=self._reset_repo(repo_name,remote_svn)
+			unpublished_commits=commits.copy()
+		else:
+			unpublished_commits=self._get_unpublished_commit(commits,repo_name)
 		for commit,data in unpublished_commits.items():
 			commit_id=commit.split(' ')[-1]
 			commit_msg="%s: %s %s %s"%(commit_id,data['msg'],data['date'],data['author'])
@@ -309,6 +324,28 @@ class gitsync():
 			svnchanges=self._get_local_svn_changes(local_svn,commit,debian_commits,master_commits)
 			self._debug("Commit %s"%commit_msg)
 			self._do_commit(svnchanges,commit_id,commit_msg,repo_name,local_svn,remote_svn)
+			if self.err:
+				self._reset_repo(repo_name,remote_svn)
+				self._do_commit(svnchanges,commit_id,commit_msg,repo_name,local_svn,remote_svn)
+
+	def _reset_repo(self,repo_name,remote_svn):
+		svn_tmpdir="%s%s%s"%(self.config['download_path'],self.svn_dir_postfix,repo_name)
+		self._debug("Reset content of %s"%svn_tmpdir)
+		shutil.rmtree("%s"%svn_tmpdir)
+		svn_local_repo=self._chk_svn_dir(repo_name,remote_svn)
+		l_svn_base_path="%s/../../"%svn_local_repo
+		local_svn=svn.local.LocalClient(l_svn_base_path)
+		if 'user_to_commit' in self.config.keys() and self.config['user_to_commit']:
+			local_svn._CommonClient__username=self.config['user_to_commit']
+			local_svn._CommonClient__password=self.config['password']
+		remote_svn.checkout(repo_name)
+		svnchanges=self._get_local_svn_changes(local_svn)
+		self._debug("Reset repo")
+		self._do_commit(svnchanges,"1","Reset repository",repo_name,local_svn,remote_svn)
+#		local_svn.run_command("delete",["%s/../../*"%svn_local_repo,"--force"])
+		local_svn.commit("Reset repository contents")
+
+		return local_svn
 
 	def _get_unpublished_commit(self,commits,repo_name):
 		sw_continue=True
@@ -333,8 +370,8 @@ class gitsync():
 		files_to_add=[]
 		localchanges={}
 		for st in local_svn.status():
+			f=st.name
 			if st.type_raw_name=='unversioned':
-				f=st.name
 				if '@' in f:
 					f="%s@"%f
 				if commit:
@@ -345,7 +382,6 @@ class gitsync():
 				else:
 					files_to_add.append(f)
 			if st.type_raw_name=='missing':
-				f=st.name
 				if commit:
 					if ("debian" in f or "docs" in f) and commit in master_commits.keys():
 						pass
@@ -357,19 +393,52 @@ class gitsync():
 					if '@' in f:
 						f="%s@"%f
 					files_to_del.append(f)
+			if st.type_raw_name=='obstructed':
+				self._debug("Obstructed file: %s"%f)
+				self._debug("Now I'll attempt to:")
+				self._debug("1) Make a cleanup")
+				self._debug("2) Move %s to /tmp"%f)
+				self._debug("3) Create a new commit")
+				self._debug("4) Add again %s"%f)
+				local_svn.cleanup()
+				dir_f=os.path.dirname(f)
+				name_f=os.path.basename(f)
+				shutil.move(f,"/tmp/%s"%name_f)
+				try:
+					local_svn.run_command('delete',[f,'--force'])
+					local_svn.commit("Obstructed file %s"%f)
+				except Exception as e:
+					self._debug("Failed obstructed commit: %s"%e)
+				shutil.move("/tmp/%s"%name_f,"%s"%dir_f)
+				files_to_add.append(f)
+				
 		localchanges.update({'add':files_to_add})
 		localchanges.update({'del':files_to_del})
 		return(localchanges)
 
 	def _do_commit(self,svnchanges,commit_id,commit_msg,repo_name,local_svn,remote_svn):
+		self.err=None
 		if svnchanges['del']:
 			svnchanges['del'].sort(key = len,reverse=True)
-			svnchanges['del'].append('--force')
-			local_svn.run_command('delete',svnchanges['del'])
-			remote_svn.run_command('delete',svnchanges['del'])
+			svnchanges['del'].append('--keep-local')
+			try:
+				remote_svn.run_command('delete',svnchanges['del'])
+				local_svn.run_command('delete',svnchanges['del'])
+			except Exception as e:
+				self._debug("Failed to del: %s"%e)
 		if svnchanges['add']:
 			for f in svnchanges['add']:
-				local_svn.add(f)
+				try:
+					local_svn.add(f)
+				except svn.exception.SvnException as e:
+					if "conflict" in e.__str__():
+						self._debug("Resolving conflict for file %s"%f)
+						local_svn.run_command("resolve",["--accept","working",f])
+						local_svn.add(f)
+					else:
+						self._debug("Could not add %s: %s"%(f,e))
+				except Exception as e:
+					self._debug("Could not add %s: %s"%(f,e))
 		try:
 			local_svn.commit(commit_msg)
 			self._write_info(repo_name,commit_id)
@@ -383,12 +452,12 @@ class gitsync():
 				self.err=e
 				self._debug("Error processing %s"%repo_name)
 				self._debug(e)
-				for k in master_commits.keys():
-					self._debug(k)
+#				for k in master_commits.keys():
+#					self._debug(k)
 
 	def _chk_svn_dir(self,repo_name,r_svn):
 		sw_ok=True
-		svn_tmpdir="%s/tmp/svn/%s"%(self.config['download_path'],repo_name)
+		svn_tmpdir="%s%s%s"%(self.config['download_path'],self.svn_dir_postfix,repo_name)
 		try:
 			os.makedirs(svn_tmpdir)
 		except Exception as e:
@@ -425,8 +494,9 @@ class gitsync():
 										ignore)
 		else:
 			try:
-				shutil.copyfile(src, dest)
-				shutil.copystat(src,dest)
+				if '.git' not in src:
+					shutil.copyfile(src, dest)
+					shutil.copystat(src,dest)
 			except:	
 				pass
 	#def _copy_data
