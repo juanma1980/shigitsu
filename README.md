@@ -18,7 +18,8 @@ If no username nor password are provided then:
  1) Must be a mapping between git users and svn users at passwords file
  2) If that's not the case then a valid username must exists at config files or be provided and a valid password must be present at passwords file or as argument
 
-Examples
+## Examples
+
 Normal execution
 ./shigitsu
 Force sync of foo
