@@ -1,11 +1,35 @@
 # Shigitsu
 
-Shigitsu is a tiny program that synchronizes git repositories with subverdsion.
+Shigitsu is a tiny program that synchronizes git repositories with subversion.
 
 ## Usage
 
 Shigitsu reads the configuration from the files located in config.d
-In this folder must be one default.json with default configs and as many "repositories.json" as needed.
+At this folder there's one default.json with default configs and as many "repositories.json" as needed.
+
+```
+Options:
+ -u | --unattended: Shigitsu will assume yes to all questions
+ -f | --force: Shigitsu will force the synchronization resetting the svn dir and re-commiting all git commits
+ repo_to_sync: If present Shigitsu will only sync repo_to_sync despite the conf file.
+ --username username: User for the svn repository (optional)
+ --password password: Password of the user (optional)
+If no username nor password are provided then:
+ 1) Must be a mapping between git users and svn users at passwords file
+ 2) If that's not the case then a valid username must exists at config files or be provided and a valid password must be present at passwords file or as argument
+
+## Examples
+
+Normal execution
+./shigitsu
+Force sync of foo
+./shigitu --force foo
+Unattended execution forcing all repos
+./shigitsu -u --force
+Unattended execution forcing user and password
+./shigitsu -u --username Joe --password sixpack
+```
+
 
 ### Default config:
 config.d/defaults.json

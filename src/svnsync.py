@@ -51,7 +51,7 @@ class svnsync():
 		sw_ok=True
 		#Change to debian/bionic
 		try:
-			repo.git.checkout('debian/xenial')
+			repo.git.checkout('debian/bionic')
 		except Exception as e:
 			_debug(e)
 			sw_ok=False
@@ -63,7 +63,7 @@ class svnsync():
 
 	def _get_commits(self,repo_path):
 		repo=Repo(repo_path)
-		commits=repo.git.rev_list("--first-parent","--pretty","master","debian/xenial")
+		commits=repo.git.rev_list("--first-parent","--pretty","master","debian/bionic")
 		commits_array=commits.split('\n')
 		commits_dict=OrderedDict()
 		msg=''
