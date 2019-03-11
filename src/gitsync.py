@@ -31,7 +31,7 @@ class gitsync():
 		if self.dbg:
 			f=open(self.log,'w')
 			f.close()
-		self.debian_release="debian/bionic"
+		self.debian_branch="debian/bionic"
 		self.sync_result={}
 		self.commits_db="/usr/share/shigitsu/commits.sql"
 		self.secrets="/usr/share/shigitsu/secrets"
@@ -155,6 +155,8 @@ class gitsync():
 		self.config=conf_dict
 		if 'local_commits_db' in self.config.keys() and self.config['local_commits_db'].lower()=='true':
 			self.commits_db="%s/.commits.sql"%os.environ['HOME']
+		if 'debian_branch' in self.config.keys():
+			self.debian_branch=self.config['debian_branch']
 
 	#def set_config
 
@@ -206,7 +208,7 @@ class gitsync():
 		sw_ok=True
 		#Change to debian/bionic
 		try:
-			repo.git.checkout(self.debian_release)
+			repo.git.checkout(self.debian_branch)
 		except Exception as e:
 			self.err=e
 			sw_ok=False
@@ -234,7 +236,7 @@ class gitsync():
 		repo=Repo(repo_path)
 		args=['--reverse','--first-parent','--pretty']
 		if branches == None:
-			branches=["master","debian/bionic"]
+			branches=["master",self.debian_branch]
 		else:
 			if type(branches)!=type([]):
 				branches=[branches]
@@ -274,7 +276,7 @@ class gitsync():
 		repo=Repo(repo_path)
 		commits=self._get_commits(repo_path)
 		master_commits=self._get_commits(repo_path,"master")
-		debian_commits=self._get_commits(repo_path,self.debian_release)
+		debian_commits=self._get_commits(repo_path,self.debian_branch)
 		svn_url="%s/%s"%(self.config['dest_url'],repo_name)
 		if self.usermap:
 		#Get first user commit
@@ -327,7 +329,7 @@ class gitsync():
 		last_commit_key=list(unpublished_commits.keys())[-1]
 		commit_id=last_commit_key(' ')[-1]
 
-		repo.git.checkout(self.debian_release)
+		repo.git.checkout(self.debian_branch)
 		svnchanges=self._get_local_svn_changes(local_svn)
 		self._do_commit(svnchanges,commit_id,commit_msg,repo_name,local_svn,remote_svn)
 
