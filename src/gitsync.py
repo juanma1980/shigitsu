@@ -34,11 +34,28 @@ class gitsync():
 		self.debian_release="debian/bionic"
 		self.sync_result={}
 		self.commits_db="/usr/share/shigitsu/commits.sql"
+		self.secrets="/usr/share/shigitsu/secrets"
 		self.err=None
 		self.time_between_syncs=2
 		self.force=False
+		self.usermap={}
 		if 'force' in kwargs.keys():
 			self.force=kwargs['force']
+		if 'usermap' in kwargs.keys():
+			if kwargs['usermap']:
+				try:
+					with open(self.secrets,'r') as f:
+						usermap=f.readlines()
+					for user in usermap:
+						user=user.rstrip()
+						gituser=user.split('=')[0]
+						svnuser=user.split('=')[-1]
+						svnpwd=svnuser.split(',')[1]
+						svnuser=svnuser.split(',')[0]
+						self.usermap.update({gituser:{'svnuser':svnuser,'svnpwd':svnpwd}})
+
+				except Exception as e:
+					print(e)
 		self.svn_dir_postfix="/tmp/svn/"
 	#def __init__
 
@@ -136,7 +153,6 @@ class gitsync():
 
 	def set_config(self,conf_dict):
 		self.config=conf_dict
-		print(self.config)
 		if 'local_commits_db' in self.config.keys() and self.config['local_commits_db'].lower()=='true':
 			self.commits_db="%s/.commits.sql"%os.environ['HOME']
 
@@ -260,6 +276,18 @@ class gitsync():
 		master_commits=self._get_commits(repo_path,"master")
 		debian_commits=self._get_commits(repo_path,self.debian_release)
 		svn_url="%s/%s"%(self.config['dest_url'],repo_name)
+		if self.usermap:
+		#Get first user commit
+			for repo,data in commits.items():
+				def_author=data['author']
+				break
+			if def_author in self.usermap.keys():
+				user=self.usermap[def_author]['user']
+				pwd=self.usermap[def_author]['pwd']
+			print (def_author)
+		elif 'user_to_commit' in self.config.keys() and self.config['user_to_commit']:
+				user=self.config['user_to_commit']
+
 		try:
 			self._debug("Checkout subversion")
 			if 'user_to_commit' in self.config.keys() and self.config['user_to_commit']:
@@ -312,6 +340,7 @@ class gitsync():
 		for commit,data in unpublished_commits.items():
 			commit_id=commit.split(' ')[-1]
 			commit_msg="%s: %s %s %s"%(commit_id,data['msg'],data['date'],data['author'])
+			print(data['author'])
 			repo.git.checkout(commit_id)
 			self._debug("Copying data from %s to %s"%(repo_path,svn_local_repo))
 			for f in os.listdir(svn_local_repo):

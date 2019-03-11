@@ -79,6 +79,7 @@ def	_read_default_config():
 	default.update({'delete_when_processed':data['default_delete_when_processed']})
 	default.update({'single_commit':data['default_single_commit']})
 	default.update({'user_to_commit':data['default_user_to_commit']})
+	default.update({'password':data['default_password']})
 	default.update({'blacklist':data['default_blacklist']})
 	default.update({'whitelist':data['default_whitelist']})
 	default.update({'dest_url':data['default_dest_url']})
@@ -140,6 +141,9 @@ def _read_config(conf_file):
 				data.update({"user_to_commit":default['user_to_commit']})
 			if password:
 				data.update({"password":password})
+			elif not "password" in data.keys() or not data['password']:
+				_error("%s: Setting default pwd %s"%(repo,default['password']),0)
+				data.update({"password":default['password']})
 			if 	not "single_commit" in data.keys() or not data['single_commit']:
 				data.update({"single_commit":default['single_commit']})
 			if 	not "delete_when_processed" in data.keys() or not data['delete_when_processed']:
@@ -209,7 +213,7 @@ def _process_repos(repos_dict):
 		_print("----------")
 		_write_log("----------")
 		if data['orig_type'].lower()=='git':
-			sync_repo=gitsync.gitsync(force=sw_force)
+			sync_repo=gitsync.gitsync(force=sw_force,usermap=True)
 		elif data['orig_type'].lower()=='svn':
 			sync_repo=svnsync.svnsync(force=sw_force)
 		sync_repo.set_config(data)
