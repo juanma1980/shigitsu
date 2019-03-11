@@ -280,12 +280,12 @@ class gitsync():
 		svn_url="%s/%s"%(self.config['dest_url'],repo_name)
 		if self.usermap:
 		#Get first user commit
-			for repo,data in commits.items():
+			for repository,data in commits.items():
 				def_author=data['author']
 				break
 			if def_author in self.usermap.keys():
-				user=self.usermap[def_author]['user']
-				pwd=self.usermap[def_author]['pwd']
+				user=self.usermap[def_author]['svnuser']
+				pwd=self.usermap[def_author]['svnpwd']
 			print (def_author)
 		elif 'user_to_commit' in self.config.keys() and self.config['user_to_commit']:
 				user=self.config['user_to_commit']
@@ -342,7 +342,9 @@ class gitsync():
 		for commit,data in unpublished_commits.items():
 			commit_id=commit.split(' ')[-1]
 			commit_msg="%s: %s %s %s"%(commit_id,data['msg'],data['date'],data['author'])
-			print(data['author'])
+			if type(repo)==type(""):
+				self._debug("Unknown error with repo %s"%repo)
+				return
 			repo.git.checkout(commit_id)
 			self._debug("Copying data from %s to %s"%(repo_path,svn_local_repo))
 			for f in os.listdir(svn_local_repo):
