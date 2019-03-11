@@ -284,9 +284,6 @@ class gitsync():
 				def_author=data['author']
 				break
 			if def_author in self.usermap.keys():
-				print("*****")
-				print(self.usermap[def_author])
-				print("*****")
 				user=self.usermap[def_author]['svnuser']
 				pwd=self.usermap[def_author]['svnpwd']
 			print (def_author)
