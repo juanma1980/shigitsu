@@ -1,3 +1,9 @@
+shigitsu (0.2-bionic) bionic; urgency=medium
+
+  * Bionic release
+
+ -- Juanma Navarro Mañez <juanma1980@gmail.com>  Mon, 11 Mar 2019 12:31:50 +0100
+
 shigitsu (0.2) xenial; urgency=medium
 
   * Add no_master_branch error
