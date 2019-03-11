@@ -1,11 +1,11 @@
 # Shigitsu
 
-Shigitsu is a tiny program that synchronizes git repositories with subverdsion.
+Shigitsu is a tiny program that synchronizes git repositories with subversion.
 
 ## Usage
 
 Shigitsu reads the configuration from the files located in config.d
-In this folder must be one default.json with default configs and as many "repositories.json" as needed.
+At this folder there's one default.json with default configs and as many "repositories.json" as needed.
 
 ```
 Options:
