@@ -85,6 +85,7 @@ def	_read_default_config():
 	default.update({'dest_url':data['default_dest_url']})
 	default.update({'dest_type':data['default_dest_type']})
 	default.update({'local_commits_db':data['local_commits_db']})
+	default.update({'debian_branch':data['debian_branch']})
 #def	_read_default_config
 
 def _read_config(conf_file):
@@ -162,6 +163,10 @@ def _read_config(conf_file):
 			if _validate_config(data):
 				repos_dict.update({repo:data})
 				log_dir=data['download_path']
+			if 'debian_branch' in data.keys():
+				data['debian_branch']=default['debian_branch']
+			else:
+				data['debian_branch']=default['debian_branch']
 	except Exception as e:
 		_print("Error configuring %s"%(e))
 	_write_log("")

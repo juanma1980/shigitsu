@@ -31,7 +31,7 @@ class gitsync():
 		if self.dbg:
 			f=open(self.log,'w')
 			f.close()
-		self.debian_release="debian/bionic"
+		self.debian_branch="debian/bionic"
 		self.sync_result={}
 		self.commits_db="/usr/share/shigitsu/commits.sql"
 		self.secrets="/usr/share/shigitsu/secrets"
@@ -155,6 +155,8 @@ class gitsync():
 		self.config=conf_dict
 		if 'local_commits_db' in self.config.keys() and self.config['local_commits_db'].lower()=='true':
 			self.commits_db="%s/.commits.sql"%os.environ['HOME']
+		if 'debian_branch' in self.config.keys():
+			self.debian_branch=self.config['debian_branch']
 
 	#def set_config
 
@@ -206,7 +208,7 @@ class gitsync():
 		sw_ok=True
 		#Change to debian/bionic
 		try:
-			repo.git.checkout(self.debian_release)
+			repo.git.checkout(self.debian_branch)
 		except Exception as e:
 			self.err=e
 			sw_ok=False
@@ -234,7 +236,7 @@ class gitsync():
 		repo=Repo(repo_path)
 		args=['--reverse','--first-parent','--pretty']
 		if branches == None:
-			branches=["master","debian/bionic"]
+			branches=["master",self.debian_branch]
 		else:
 			if type(branches)!=type([]):
 				branches=[branches]
@@ -274,16 +276,19 @@ class gitsync():
 		repo=Repo(repo_path)
 		commits=self._get_commits(repo_path)
 		master_commits=self._get_commits(repo_path,"master")
-		debian_commits=self._get_commits(repo_path,self.debian_release)
+		debian_commits=self._get_commits(repo_path,self.debian_branch)
 		svn_url="%s/%s"%(self.config['dest_url'],repo_name)
 		if self.usermap:
 		#Get first user commit
-			for repo,data in commits.items():
+			for repository,data in commits.items():
 				def_author=data['author']
 				break
 			if def_author in self.usermap.keys():
-				user=self.usermap[def_author]['user']
-				pwd=self.usermap[def_author]['pwd']
+				print("*****")
+				print(self.usermap[def_author])
+				print("*****")
+				user=self.usermap[def_author]['svnuser']
+				pwd=self.usermap[def_author]['svnpwd']
 			print (def_author)
 		elif 'user_to_commit' in self.config.keys() and self.config['user_to_commit']:
 				user=self.config['user_to_commit']
@@ -327,7 +332,7 @@ class gitsync():
 		last_commit_key=list(unpublished_commits.keys())[-1]
 		commit_id=last_commit_key(' ')[-1]
 
-		repo.git.checkout(self.debian_release)
+		repo.git.checkout(self.debian_branch)
 		svnchanges=self._get_local_svn_changes(local_svn)
 		self._do_commit(svnchanges,commit_id,commit_msg,repo_name,local_svn,remote_svn)
 
@@ -340,7 +345,9 @@ class gitsync():
 		for commit,data in unpublished_commits.items():
 			commit_id=commit.split(' ')[-1]
 			commit_msg="%s: %s %s %s"%(commit_id,data['msg'],data['date'],data['author'])
-			print(data['author'])
+			if type(repo)==type(""):
+				self._debug("Unknown error with repo %s"%repo)
+				return
 			repo.git.checkout(commit_id)
 			self._debug("Copying data from %s to %s"%(repo_path,svn_local_repo))
 			for f in os.listdir(svn_local_repo):
