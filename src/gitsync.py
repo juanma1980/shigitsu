@@ -286,7 +286,6 @@ class gitsync():
 			if def_author in self.usermap.keys():
 				user=self.usermap[def_author]['svnuser']
 				pwd=self.usermap[def_author]['svnpwd']
-			print (def_author)
 		elif 'user_to_commit' in self.config.keys() and self.config['user_to_commit']:
 				user=self.config['user_to_commit']
 
