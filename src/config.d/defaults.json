@@ -9,6 +9,7 @@
 		"default_dest_url": "",
 		"default_blacklist":["lliurexhub.io","llxdoc.*","presentations","quadrapassel","llx-valencianitzador","HIG","gparted","dia","pavucontrol","polin"],
 		"default_whitelist":[],
+		"debian_branch":[],
 		"local_commits_db":"true"
 }
 
