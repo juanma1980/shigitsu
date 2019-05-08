@@ -130,7 +130,7 @@ class gitsync():
 						if sw_match:
 							continue
 				repo_path=self._get_repo(repo['clone_url'],repo_name)
-				if self.fetch=False:
+				if self.fetch==False:
 					if repo_path:
 						if self._check_repo_consistency(repo_path):
 							if 'user_to_commit' in self.config.keys() and self.config['user_to_commit']:
