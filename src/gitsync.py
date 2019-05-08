@@ -38,9 +38,12 @@ class gitsync():
 		self.err=None
 		self.time_between_syncs=2
 		self.force=False
+		self.fetch=False
 		self.usermap={}
 		if 'force' in kwargs.keys():
 			self.force=kwargs['force']
+		if 'fetch' in kwargs.keys():
+			self.fetch=kwargs['fetch']
 		if 'usermap' in kwargs.keys():
 			if kwargs['usermap']:
 				try:
@@ -127,18 +130,19 @@ class gitsync():
 						if sw_match:
 							continue
 				repo_path=self._get_repo(repo['clone_url'],repo_name)
-				if repo_path:
-					if self._check_repo_consistency(repo_path):
-						if 'user_to_commit' in self.config.keys() and self.config['user_to_commit']:
-							self._debug("user_to_commit: %s"%self.config['user_to_commit'])
-						if not self._sync_repo(repo_path,repo_name):
-							sync_error.append({repo_name:self.err})
+				if self.fetch=False:
+					if repo_path:
+						if self._check_repo_consistency(repo_path):
+							if 'user_to_commit' in self.config.keys() and self.config['user_to_commit']:
+								self._debug("user_to_commit: %s"%self.config['user_to_commit'])
+							if not self._sync_repo(repo_path,repo_name):
+								sync_error.append({repo_name:self.err})
+						else:
+							inconsistent.append({repo_name:self.err})
+							self._debug("Discard for inconsistency %s"%repo_name)
 					else:
-						inconsistent.append({repo_name:self.err})
-						self._debug("Discard for inconsistency %s"%repo_name)
-				else:
-					no_master_branch.append({repo_name:self.err})
-					self._debug("Discard for no master branch %s"%repo_name)
+						no_master_branch.append({repo_name:self.err})
+						self._debug("Discard for no master branch %s"%repo_name)
 				if self.config['delete_when_processed'].lower()=='true' and not self.err:
 					shutil.rmtree("%s/%s"%(self.config['download_path'],repo_name))
 					shutil.rmtree(repo_path)
@@ -286,7 +290,6 @@ class gitsync():
 			if def_author in self.usermap.keys():
 				user=self.usermap[def_author]['svnuser']
 				pwd=self.usermap[def_author]['svnpwd']
-			print (def_author)
 		elif 'user_to_commit' in self.config.keys() and self.config['user_to_commit']:
 				user=self.config['user_to_commit']
 

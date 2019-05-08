@@ -218,7 +218,7 @@ def _process_repos(repos_dict):
 		_print("----------")
 		_write_log("----------")
 		if data['orig_type'].lower()=='git':
-			sync_repo=gitsync.gitsync(force=sw_force,usermap=True)
+			sync_repo=gitsync.gitsync(force=sw_force,usermap=True,fetch=sw_fetch)
 		elif data['orig_type'].lower()=='svn':
 			sync_repo=svnsync.svnsync(force=sw_force)
 		sync_repo.set_config(data)
@@ -276,6 +276,7 @@ def _help():
 	print("Options:")
 	print(" -u | --unattended: Shigitsu will assume yes to all questions")
 	print(" -f | --force: Shigitsu will force the synchronization resetting the svn dir and re-commiting all git commits")
+	print(" -d | --download-only: Shigitsu will only download the source repo")
 	print(" repo_to_sync: If present Shigitsu will only sync repo_to_sync despite the conf file.")
 	print(" --username username: User for the svn repository (optional)")
 	print(" --password password: Password of the user (optional)")
@@ -298,6 +299,7 @@ def _help():
 #### MAIN PROGRAM ####
 sync_repos=[]
 sw_force=False
+sw_fetch=False
 sw_unattended=False
 if (sys.argv):
 	sw_user=False
@@ -315,6 +317,8 @@ if (sys.argv):
 			sw_force=True
 		elif arg=='-u' or arg=='--unattended':
 			sw_unattended=True
+		elif arg=='-d' or arg=='--download-only':
+			sw_fetch=True
 		elif arg=='--username':
 			sw_user=True
 		elif arg=='--password':

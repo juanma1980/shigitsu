@@ -4,10 +4,12 @@
 		"default_delete_when_processed":"False",
 		"default_single_commit":"False",
 		"default_user_to_commit":"",
+		"default_password":"",
 		"default_dest_type":"",
 		"default_dest_url": "",
 		"default_blacklist":["lliurexhub.io","llxdoc.*","presentations","quadrapassel","llx-valencianitzador","HIG","gparted","dia","pavucontrol","polin"],
 		"default_whitelist":[],
+		"debian_branch":"debian/bionic",
 		"local_commits_db":"true"
 }
 
