@@ -1,3 +1,9 @@
+shigitsu (0.3-bionid) bionic; urgency=medium
+
+  * Usermap now uses usermail and not usernames
+
+ -- Juanma Navarro Mañez <juanma1980@gmail.com>  Tue, 17 Sep 2019 14:25:29 +0200
+
 shigitsu (0.2-bionic) bionic; urgency=medium
 
   * Bionic release
