@@ -55,7 +55,7 @@ class gitsync():
 						svnuser=user.split('=')[-1]
 						svnpwd=svnuser.split(',')[1]
 						svnuser=svnuser.split(',')[0]
-						self.usermap.update({gituser:{'svnuser':svnuser,'svnpwd':svnpwd}})
+						self.usermap[gituser]={'svnuser':svnuser,'svnpwd':svnpwd}
 
 				except Exception as e:
 					print(e)
@@ -252,12 +252,13 @@ class gitsync():
 		commit=''
 		author=''
 		date=''
+		mail=''
 		for data in commits_array:
 			if data.startswith('Merge'):
 				pass
 			elif data.startswith('commit'):
 				if commit:
-					commits_dict.update({commit:{'author':author,'date':date,'msg':msg}})
+					commits_dict.update({commit:{'author':author,'date':date,'msg':msg,'mail':mail}})
 					msg=''
 					commit=''
 					author=''
@@ -265,6 +266,7 @@ class gitsync():
 				commit=data
 			elif data.startswith('Author'):
 				author=' '.join(data.split(' ')[1:])
+				mail=author.split("<")[-1].rstrip(">")
 			elif data.startswith('Date'):
 				date=' '.join(data.split(' ')[1:])
 			elif data=='':
@@ -272,7 +274,7 @@ class gitsync():
 			else:
 				msg+="%s "%data.strip()
 		#Last item
-		commits_dict.update({commit:{'author':author,'date':date,'msg':msg}})
+		commits_dict.update({commit:{'author':author,'date':date,'msg':msg,'mail':mail}})
 		return commits_dict
 	#def _get_commits
 
@@ -284,38 +286,46 @@ class gitsync():
 		svn_url="%s/%s"%(self.config['dest_url'],repo_name)
 		if self.usermap:
 		#Get first user commit
+			self._debug("Loading usermap")
 			for repository,data in commits.items():
 				def_author=data['author']
+				mail_author=data['mail']
 				break
-			if def_author in self.usermap.keys():
-				user=self.usermap[def_author]['svnuser']
-				pwd=self.usermap[def_author]['svnpwd']
+			if mail_author in self.usermap.keys():
+				user=self.usermap[mail_author]['svnuser']
+				pwd=self.usermap[mail_author]['svnpwd']
+			else:
+				user=self.usermap["guest"]['svnuser']
+				pwd=self.usermap["guest"]['svnpwd']
+			self._debug("Git: %s Svn:%s"%(mail_author,user))
 		elif 'user_to_commit' in self.config.keys() and self.config['user_to_commit']:
 				user=self.config['user_to_commit']
-
+				pwd=self.config['password']
 		try:
 			self._debug("Checkout subversion")
-			if 'user_to_commit' in self.config.keys() and self.config['user_to_commit']:
-				self._debug("user_to_commit: %s"%self.config['user_to_commit'])
-				subprocess.run(["svn","mkdir",svn_url,"-m","Create repo","--username",self.config['user_to_commit'],'--password',self.config['password']],check=True)
+			if user:
+				self._debug("user_to_commit: %s"%user)
+				self._debug("Create dir: %s"%svn_url)
+				subprocess.run(["svn","mkdir","%s"%svn_url,"-m","\"Create repo\"","--username",user,'--password',pwd],check=True)
 			else:
-				subprocess.run(["svn","mkdir",svn_url,"-m","Create repo"],check=True)
+				self._debug("No username!!")
+				self._debug("Create dir: %s"%svn_url)
+				subprocess.run(["svn","mkdir",svn_url,"-m","\"Create repo\""],check=True)
 		except subprocess.CalledProcessError as e:
 			print(e.stderr)
 		except Exception as e:
 			print(e)
 		self._debug("Connecting to svn at %s"%svn_url)
 		r_svn=svn.remote.RemoteClient(svn_url)
-		if 'user_to_commit' in self.config.keys() and self.config['user_to_commit']:
-			self._debug("user_to_commit: %s"%self.config['user_to_commit'])
-			r_svn._CommonClient__username=self.config['user_to_commit']
-			r_svn._CommonClient__password=self.config['password']
-		svn_local_repo=self._chk_svn_dir(repo_name,r_svn)
-		l_svn_base_path="%s/../../"%svn_local_repo
-		l_svn=svn.local.LocalClient(l_svn_base_path)
-		if 'user_to_commit' in self.config.keys() and self.config['user_to_commit']:
-			l_svn._CommonClient__username=self.config['user_to_commit']
-			l_svn._CommonClient__password=self.config['password']
+		if user:
+			self._debug("user_to_commit: %s"%user)
+			r_svn._CommonClient__username=user
+			r_svn._CommonClient__password=pwd
+			svn_local_repo=self._chk_svn_dir(repo_name,r_svn)
+			l_svn_base_path="%s/../../"%svn_local_repo
+			l_svn=svn.local.LocalClient(l_svn_base_path)
+			l_svn._CommonClient__username=user
+			l_svn._CommonClient__password=pwd
 		sw_continue=True
 		if self.config['single_commit'].lower()=='true':
 			self._single_commit(debian_commits,repo_name,repo,repo_path,l_svn,r_svn,svn_local_repo)
@@ -359,22 +369,37 @@ class gitsync():
 			self._debug("Accesing local svn at %s"%svn_local_repo)
 			svnchanges=self._get_local_svn_changes(local_svn,commit,debian_commits,master_commits)
 			self._debug("Commit %s"%commit_msg)
+            #Set user and password for commit
+			if data['mail'] in self.usermap.keys():
+				user=self.usermap[data['mail']]['svnuser']
+				pwd=self.usermap[data['mail']]['svnpwd']
+			else:
+				user=self.usermap["guest"]['svnuser']
+				pwd=self.usermap["guest"]['svnpwd']
+			remote_svn._CommonClient__username=user
+			remote_svn._CommonClient__password=pwd
+            #Do commit
 			self._do_commit(svnchanges,commit_id,commit_msg,repo_name,local_svn,remote_svn)
 			if self.err:
-				self._reset_repo(repo_name,remote_svn)
+				self._reset_repo(repo_name,remote_svn,user,pwd)
 				self._do_commit(svnchanges,commit_id,commit_msg,repo_name,local_svn,remote_svn)
 
-	def _reset_repo(self,repo_name,remote_svn):
+	def _reset_repo(self,repo_name,remote_svn,user='',pwd=''):
 		svn_tmpdir="%s%s%s"%(self.config['download_path'],self.svn_dir_postfix,repo_name)
 		self._debug("Reset content of %s"%svn_tmpdir)
 		shutil.rmtree("%s"%svn_tmpdir)
 		svn_local_repo=self._chk_svn_dir(repo_name,remote_svn)
 		l_svn_base_path="%s/../../"%svn_local_repo
 		local_svn=svn.local.LocalClient(l_svn_base_path)
-		if 'user_to_commit' in self.config.keys() and self.config['user_to_commit']:
-			local_svn._CommonClient__username=self.config['user_to_commit']
-			local_svn._CommonClient__password=self.config['password']
-		remote_svn.checkout(repo_name)
+		if not user:
+			user=self.usermap["guest"]['svnuser']
+			pwd=self.usermap["guest"]['svnpwd']
+		local_svn._CommonClient__username=user
+		local_svn._CommonClient__password=pwd
+		try:
+			remote_svn.checkout(repo_name)
+		except Exception as e:		
+			print("Can't do checkout on %s. Reason: %s"%(repo_name,e))
 		svnchanges=self._get_local_svn_changes(local_svn)
 		self._debug("Reset repo")
 		self._do_commit(svnchanges,"1","Reset repository",repo_name,local_svn,remote_svn)
