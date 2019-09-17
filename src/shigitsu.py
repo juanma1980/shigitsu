@@ -313,7 +313,7 @@ if (sys.argv):
 			password=arg
 			sw_pwd=False
 			continue
-		if arg=='--force' or arg=='f':
+		if arg=='--force' or arg=='-f':
 			sw_force=True
 		elif arg=='-u' or arg=='--unattended':
 			sw_unattended=True
