@@ -67,9 +67,15 @@ class gitsync():
 			if (type(msg)==type('')):
 				if '--password' in msg:
 					msg=re.sub(r"'--password', '.*?'","'--password', '#####'",msg)
-			print("Debug: %s"%msg)
-			with open(self.log,'a') as f:
-				f.write("%s\n"%msg)
+			try:
+				print("Debug: %s"%msg)
+			except:
+				pass
+			try:
+				with open(self.log,'a') as f:
+					f.write("%s\n"%msg)
+			except:
+				pass
 	#def _debug
 	
 	def set_download_path(self,path):
@@ -123,12 +129,16 @@ class gitsync():
 					else:
 						sw_match=False
 						for bl_repo in self.config['blacklist']:
-							if re.search(bl_repo,repo_name):
-								blacklisted.append(repo_name)
-								sw_match=True
-								break
+							if bl_repo:
+								print("RE search %s in %s"%(bl_repo,repo_name))
+								if re.search(bl_repo,repo_name):
+									blacklisted.append(repo_name)
+									sw_match=True
+									break
 						if sw_match:
+							self._debug("Blacklisted %s"%repo_name)
 							continue
+				self._debug("Cloning %s"%repo_name)
 				repo_path=self._get_repo(repo['clone_url'],repo_name)
 				if self.fetch==False:
 					if repo_path:
@@ -245,7 +255,11 @@ class gitsync():
 			if type(branches)!=type([]):
 				branches=[branches]
 		args.extend(branches)
-		commits=repo.git.rev_list(args)
+		try:
+			commits=repo.git.rev_list(args)
+		except:
+			commits=""
+			print("*********************************************************************")
 		commits_array=commits.split('\n')
 		commits_dict=OrderedDict()
 		msg=''
@@ -312,9 +326,9 @@ class gitsync():
 				self._debug("Create dir: %s"%svn_url)
 				subprocess.run(["svn","mkdir",svn_url,"-m","\"Create repo\""],check=True)
 		except subprocess.CalledProcessError as e:
-			print(e.stderr)
+			print("%s couldn't be created: %s"%(svn_url,e.stderr))
 		except Exception as e:
-			print(e)
+			print("Error creating %s: %s"%(svn_url,e.stderr))
 		self._debug("Connecting to svn at %s"%svn_url)
 		r_svn=svn.remote.RemoteClient(svn_url)
 		if user:
@@ -403,8 +417,11 @@ class gitsync():
 		svnchanges=self._get_local_svn_changes(local_svn)
 		self._debug("Reset repo")
 		self._do_commit(svnchanges,"1","Reset repository",repo_name,local_svn,remote_svn)
-#		local_svn.run_command("delete",["%s/../../*"%svn_local_repo,"--force"])
-		local_svn.commit("Reset repository contents")
+#		local_svn.run_command("delete",["%s/../../*"%svn_local_repo,"--force"])		
+		try:
+			local_svn.commit("Reset repository contents")
+		except:
+			print("Error resetting repo")
 
 		return local_svn
 
