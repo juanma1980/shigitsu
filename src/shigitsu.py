@@ -163,9 +163,7 @@ def _read_config(conf_file):
 			if _validate_config(data):
 				repos_dict.update({repo:data})
 				log_dir=data['download_path']
-			if 'debian_branch' in data.keys():
-				data['debian_branch']=default['debian_branch']
-			else:
+			if not data.get('debian_branch',''):
 				data['debian_branch']=default['debian_branch']
 	except Exception as e:
 		_print("Error configuring %s"%(e))
