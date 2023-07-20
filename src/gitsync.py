@@ -22,6 +22,9 @@ _=gettext.gettext
 import sys
 import re
 import sqlite3
+
+CURRENT_RELEASE="focal"
+
 class gitsync():
 
 	def __init__(self,*args,**kwargs):
@@ -114,7 +117,12 @@ class gitsync():
 				sys.exit(1)				
 			for repo in repos:
 				self.err=''
-				repo_name=repo['clone_url'].split('/')[-1].replace('.git','')
+				try:
+					repo_name=repo['clone_url'].split('/')[-1].replace('.git','')
+				except:
+					print("Error parsing url")
+					print(repo)
+					sys.exit(2)
 				self._debug("Analyzing %s"%repo_name)
 				if self.config['whitelist']:
 					if repo_name not in self.config['whitelist']:
@@ -142,10 +150,11 @@ class gitsync():
 				repo_path=self._get_repo(repo['clone_url'],repo_name)
 				if self.fetch==False:
 					if repo_path:
-						if self._check_repo_consistency(repo_path):
+						master_branch,consistent=self._check_repo_consistency(repo_path)
+						if consistent:
 							if 'user_to_commit' in self.config.keys() and self.config['user_to_commit']:
 								self._debug("user_to_commit: %s"%self.config['user_to_commit'])
-							if not self._sync_repo(repo_path,repo_name):
+							if not self._sync_repo(repo_path,repo_name,master_branch):
 								sync_error.append({repo_name:self.err})
 						else:
 							inconsistent.append({repo_name:self.err})
@@ -194,8 +203,11 @@ class gitsync():
 	#def _list_repos
 
 	def _get_repo(self,repo,repo_name):
-		download_path="%s/%s"%(self.config['download_path'],repo_name)
+		download_path=os.path.join(self.config['download_path'],repo_name)
 		self._debug("Cloning %s in %s"%(repo,download_path))
+		if self.force and os.path.isdir(download_path): #Delete local git and clone
+			shutil.rmtree("{}".format(download_path))
+			
 		if os.path.isdir(download_path):
 			repo = git.Repo(download_path)
 			try:
@@ -227,24 +239,43 @@ class gitsync():
 			self.err=e
 			sw_ok=False
 		#Merge with master
+		master_branch="master"
 		if sw_ok:
+			master_branch=self._try_to_get_master_branch(repo)
 			try:
-				repo.git.merge("master")
-			except:
-					try:
-						repo.git.merge("origin/master")
-					except Exception as e:
-						self.err=e
-						sw_ok=False
+				repo.git.merge(master_branch)
+			except Exception as e:
+				self.err=e
+				sw_ok=False
 		try:
-			repo.git.checkout('master')
+			repo.git.checkout(master_branch)
 		except Exception as e:
 			#No master branch, discar repo
 			self.err=e
 			sw_ok=False
-
-		return sw_ok
+		return (master_branch,sw_ok)
 	#def _check_repo_consistency
+
+	def _try_to_get_master_branch(self,repo):
+		#As master_branch could be "master" or a release (bionic, focal..etc...) or "legacy"
+		#the first attempt will be against "release"
+		master_branch=self.debian_branch.split("/")[-1]
+		if master_branch=="debian":
+			master_branch="master"
+		if master_branch==CURRENT_RELEASE:
+			candidate_branches=[master_branch,"master","origin/master"]
+		else:
+			candidate_branches=[master_branch,"{}_master".format(master_branch),"legacy","master","origin/master"]
+		for branch in candidate_branches:
+			try:
+				repo.git.checkout(branch)
+				master_branch=branch
+				break
+			except:
+				pass
+		repo.git.checkout(self.debian_branch)
+		return (master_branch)
+	#def _try_to_get_master_branch
 
 	def _get_commits(self,repo_path,branches=None):
 		repo=Repo(repo_path)
@@ -252,7 +283,7 @@ class gitsync():
 		if branches == None:
 			branches=["master",self.debian_branch]
 		else:
-			if type(branches)!=type([]):
+			if isinstance(branches,list)==False:
 				branches=[branches]
 		args.extend(branches)
 		try:
@@ -271,13 +302,12 @@ class gitsync():
 			if data.startswith('Merge'):
 				pass
 			elif data.startswith('commit'):
-				if commit:
-					commits_dict.update({commit:{'author':author,'date':date,'msg':msg,'mail':mail}})
-					msg=''
-					commit=''
-					author=''
-					date=''
 				commit=data
+				commits_dict.update({commit:{'author':author,'date':date,'msg':msg,'mail':mail}})
+				msg=''
+				commit=''
+				author=''
+				date=''
 			elif data.startswith('Author'):
 				author=' '.join(data.split(' ')[1:])
 				mail=author.split("<")[-1].rstrip(">")
@@ -288,19 +318,23 @@ class gitsync():
 			else:
 				msg+="%s "%data.strip()
 		#Last item
-		commits_dict.update({commit:{'author':author,'date':date,'msg':msg,'mail':mail}})
+		if len(commit.strip())>0:
+			commits_dict.update({commit:{'author':author,'date':date,'msg':msg,'mail':mail}})
 		return commits_dict
 	#def _get_commits
 
-	def _sync_repo(self,repo_path,repo_name):
+	def _sync_repo(self,repo_path,repo_name,master_branch="master"):
 		repo=Repo(repo_path)
-		commits=self._get_commits(repo_path)
-		master_commits=self._get_commits(repo_path,"master")
+		#commits=self._get_commits(repo_path)
+		master_commits=self._get_commits(repo_path,master_branch)
+		commits=master_commits
 		debian_commits=self._get_commits(repo_path,self.debian_branch)
 		svn_url="%s/%s"%(self.config['dest_url'],repo_name)
 		if self.usermap:
 		#Get first user commit
 			self._debug("Loading usermap")
+			mail_author=""
+			def_author=""
 			for repository,data in commits.items():
 				def_author=data['author']
 				mail_author=data['mail']
@@ -342,7 +376,7 @@ class gitsync():
 			l_svn._CommonClient__password=pwd
 		sw_continue=True
 		if self.config['single_commit'].lower()=='true':
-			self._single_commit(debian_commits,repo_name,repo,repo_path,l_svn,r_svn,svn_local_repo)
+			self._single_commits(debian_commits,repo_name,repo,repo_path,l_svn,r_svn,svn_local_repo)
 		else:
 			self._incremental_commits(commits,debian_commits,master_commits,repo_name,repo,repo_path,l_svn,r_svn,svn_local_repo)
 	#def sync_commits
@@ -363,16 +397,24 @@ class gitsync():
 	def _incremental_commits(self,commits,debian_commits,master_commits,repo_name,repo,repo_path,local_svn,remote_svn,svn_local_repo):
 		if self.force:
 			local_svn=self._reset_repo(repo_name,remote_svn)
-			unpublished_commits=commits.copy()
+			unpublished_commits=debian_commits.copy()
 		else:
-			unpublished_commits=self._get_unpublished_commit(commits,repo_name)
+			unpublished_commits=self._get_unpublished_commit(debian_commits,repo_name)
 		for commit,data in unpublished_commits.items():
 			commit_id=commit.split(' ')[-1]
 			commit_msg="%s: %s %s %s"%(commit_id,data['msg'],data['date'],data['author'])
 			if type(repo)==type(""):
 				self._debug("Unknown error with repo %s"%repo)
 				return
-			repo.git.checkout(commit_id)
+			try:
+				repo.git.checkout(commit_id)
+			except:
+				self._debug("Error on checkout commit %s"%commit_id)
+				fail=self.sync_result.get('Failed Commit',[])
+				fail.append("%s->%s"%(repo,commit_id))
+				self.sync_result.update({'Failed Commit':fail})
+				continue
+
 			self._debug("Copying data from %s to %s"%(repo_path,svn_local_repo))
 			for f in os.listdir(svn_local_repo):
 				if os.path.isdir("%s/%s"%(svn_local_repo,f)):
@@ -393,6 +435,7 @@ class gitsync():
 			remote_svn._CommonClient__username=user
 			remote_svn._CommonClient__password=pwd
             #Do commit
+			print("COMMIT: {}".format(commit_id))
 			self._do_commit(svnchanges,commit_id,commit_msg,repo_name,local_svn,remote_svn)
 			if self.err:
 				self._reset_repo(repo_name,remote_svn,user,pwd)
@@ -427,7 +470,7 @@ class gitsync():
 
 	def _get_unpublished_commit(self,commits,repo_name):
 		sw_continue=True
-		unpublished_commits={}
+		unpublished_commits=OrderedDict()
 		last_commit=self._get_last_commit(repo_name)
 		for commit,data in commits.items():
 			commit_id=commit.split(' ')[-1]
@@ -580,6 +623,11 @@ class gitsync():
 	#def _copy_data
 
 	def _set_db(self):
+		branch=self.config['debian_branch'].split("/")[-1]
+		branch="{}_commits.sql".format(branch)
+		db=os.path.dirname(self.commits_db)
+		self.commits_db=os.path.join(db,branch)
+
 		sw_db_exists=False
 		if os.path.isfile(self.commits_db):
 			sw_db_exists=True
@@ -594,9 +642,9 @@ class gitsync():
 			self._debug(e)
 			self._debug(self.commits_db)
 		self.db_cursor=self.db.cursor()
-		if sw_db_exists==False:
+		#if sw_db_exists==False:
 			#self._debug("Creating cache table")
-			self.db_cursor.execute('''CREATE TABLE data(repo TEXT PRIMARY KEY, commit_id TEXT)''')
+		self.db_cursor.execute('''CREATE TABLE IF NOT EXISTS data(repo TEXT PRIMARY KEY, commit_id TEXT)''')
 		self.db_cursor.execute("SELECT count(*) FROM data")
 		self.processed=self.db_cursor.fetchone()
 		self._debug("%s repos present"%self.processed)
