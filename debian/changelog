@@ -1,4 +1,10 @@
-shigitsu (0.3-bionid) bionic; urgency=medium
+shigitsu (0.3lliurex23) jammy; urgency=medium
+
+  * Jammy release 
+
+ -- Juanma1980 <juanma1980@gmail.com>  Fri, 12 Jan 2024 10:01:41 +0100
+
+shigitsu (0.3-bionic) bionic; urgency=medium
 
   * Usermap now uses usermail and not usernames
 
